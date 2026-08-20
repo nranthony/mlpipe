@@ -44,6 +44,7 @@ def base_config(cleaner=None):
 def run_clean(store, manifests, config):
     seeds = [
         store.save(input_frame(), "validated_train", ext="parquet"),
+        store.save(input_frame(), "validated_validation", ext="parquet"),
         store.save(FEATURES_META, "features_meta", ext="json"),
     ]
     return Pipeline([CleanStep()], store, manifests, config).run(seeds=seeds)

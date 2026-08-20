@@ -51,15 +51,20 @@ CLEANERS = {"baseline": _baseline, "minimal": _minimal}  # kind -> implementatio
 
 class CleanStep(Step):
     name = "clean"
-    inputs = ["validated_train", "features_meta"]
-    outputs = ["clean_table"]
+    inputs = ["validated_train", "validated_validation", "features_meta"]
+    outputs = ["clean_table", "clean_validation"]
     config_model = CleanConfig
 
     def run(self, ctx):
         cfg = CleanConfig.model_validate(ctx.config.get(self.name, {})).cleaner
         features = sorted(ctx.get("features_meta")["feature_sets"][cfg.feature_set])
-        lf = CLEANERS[cfg.kind](ctx.get_lazy("validated_train"), cfg, features, cfg.targets)
-        df = lf.collect(engine="streaming")
-        art = ctx.put(df, "clean_table")
-        ctx.log_meta("clean", {"rows": df.height, "features": len(features), "cleaner": cfg.kind})
-        return StepResult(outputs={"clean_table": art})
+        outs = {}
+        for in_key, out_key in [
+            ("validated_train", "clean_table"),
+            ("validated_validation", "clean_validation"),
+        ]:
+            lf = CLEANERS[cfg.kind](ctx.get_lazy(in_key), cfg, features, cfg.targets)
+            df = lf.collect(engine="streaming")
+            outs[out_key] = ctx.put(df, out_key)
+            ctx.log_meta(out_key, {"rows": df.height, "features": len(features), "cleaner": cfg.kind})
+        return StepResult(outputs=outs)
