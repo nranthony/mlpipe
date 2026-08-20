@@ -70,6 +70,7 @@ class Pipeline:
     ) -> dict[str, Any]:
         config = apply_overrides(self.config, overrides)
         ctx = RunContext(config, self.store, self.tracker)
+        ctx.manifest_log = self.log
         for artifact in seeds or []:
             ctx.register(artifact)
 

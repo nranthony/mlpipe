@@ -57,18 +57,27 @@ class ManifestLog:
         return latest
 
     def lineage(self, content_hash: str) -> list[dict]:
-        """Manifests from the producer of content_hash back to raw inputs."""
-        producer: dict[str, dict] = {}
-        for m in self.entries():
-            if m["status"] in ("success", "cached"):
-                for h in m["outputs"].values():
-                    producer[h] = m
+        """Manifests from the producer of content_hash back to raw inputs.
+        Pass-through steps re-emit an input hash, so a hash can have several
+        producers: for a manifest's inputs, the producer must come earlier."""
+        done = [m for m in self.entries() if m["status"] in ("success", "cached")]
+        producers: dict[str, list[int]] = {}
+        for i, m in enumerate(done):
+            for h in m["outputs"].values():
+                producers.setdefault(h, []).append(i)
         chain: list[dict] = []
-        frontier = [content_hash]
+        seen: set[str] = set()
+        frontier = [(content_hash, len(done))]
         while frontier:
-            m = producer.get(frontier.pop(0))
-            if m is None or any(c["manifest_id"] == m["manifest_id"] for c in chain):
+            h, before = frontier.pop(0)
+            earlier = [i for i in producers.get(h, []) if i < before]
+            if not earlier:
                 continue
+            i = max(earlier)
+            m = done[i]
+            if m["manifest_id"] in seen:
+                continue
+            seen.add(m["manifest_id"])
             chain.append(m)
-            frontier.extend(m["inputs"].values())
+            frontier.extend((ih, i) for ih in m["inputs"].values())
         return chain
