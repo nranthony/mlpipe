@@ -69,6 +69,10 @@ class Pipeline:
         seeds: list[Artifact] | None = None,
     ) -> dict[str, Any]:
         config = apply_overrides(self.config, overrides)
+        for step in self.steps:  # config typos die here, before any step runs
+            model = getattr(step, "config_model", None)
+            if model is not None:
+                config[step.name] = model.model_validate(config.get(step.name, {})).model_dump()
         ctx = RunContext(config, self.store, self.tracker)
         ctx.manifest_log = self.log
         for artifact in seeds or []:
