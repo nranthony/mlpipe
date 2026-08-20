@@ -93,3 +93,6 @@ class RunContext(interfaces.RunContext):
     def log_metric(self, name: str, value: float) -> None:
         self.step_metrics[name] = float(value)
         self._tracker.log_metrics({name: float(value)})
+
+    def register_model(self, artifact: Artifact, name: str) -> None:
+        self._tracker.register_model(artifact, name)

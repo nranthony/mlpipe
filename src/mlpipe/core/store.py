@@ -34,6 +34,8 @@ class LocalCasStore:
             joblib.dump(obj, buf)
         elif ext == "json":
             buf.write(canonical_json(obj).encode())
+        elif ext == "html":
+            buf.write(obj.encode())
         else:
             raise ValueError(f"unknown artifact ext: {ext!r}")
         return buf.getvalue()
@@ -72,4 +74,6 @@ class LocalCasStore:
             return joblib.load(path)
         if ext == "json":
             return json.loads(path.read_text())
+        if ext == "html":
+            return path.read_text()
         raise ValueError(f"unknown artifact ext: {ext!r}")
