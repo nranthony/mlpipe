@@ -113,6 +113,7 @@ class Pipeline:
                 "status": "cached",
                 "outputs": cached["outputs"],
                 "metrics": cached.get("metrics", {}),
+                "meta": cached.get("meta", {}),
                 "ended_at": _now(),
             }
             self.log.write(record)
@@ -128,6 +129,7 @@ class Pipeline:
                 "status": "success",
                 "outputs": {k: a.content_hash for k, a in ctx.step_outputs.items()},
                 "metrics": ctx.step_metrics,
+                "meta": ctx.step_meta,
                 "ended_at": _now(),
             }
         except Exception:

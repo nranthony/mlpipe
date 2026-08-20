@@ -25,6 +25,8 @@ class LocalCasStore:
         self.root.mkdir(parents=True, exist_ok=True)
 
     def _serialize(self, obj: Any, ext: str) -> bytes:
+        if isinstance(obj, Path):  # snapshot a file's exact bytes (e.g. a download)
+            return obj.read_bytes()
         buf = io.BytesIO()
         if ext == "parquet":
             obj.write_parquet(buf)

@@ -36,6 +36,11 @@ class RunContext(interfaces.RunContext):
         self.step_inputs: dict[str, str] = {}
         self.step_outputs: dict[str, Artifact] = {}
         self.step_metrics: dict[str, float] = {}
+        self.step_meta: dict[str, Any] = {}
+
+    def log_meta(self, key: str, value: Any) -> None:
+        """Non-numeric facts destined for the manifest (dataset name, sizes...)."""
+        self.step_meta[key] = value
 
     def register(self, artifact: Artifact) -> None:
         self.registry[artifact.key] = artifact
