@@ -1,6 +1,9 @@
 # Proposal: provision the cycle-0 dev environment (human step)
 
-- Status: In review (awaiting human action)
+- Status: Accepted — resolved 2026-08-20 via host-side `uv lock` + `uv sync --all-extras`
+  (option 1; human also added `[tool.uv] no-build = false` to opt out of the sandbox's
+  wheels-only gate so mlpipe itself installs editable). Verified in-sandbox: all 19
+  imports OK, torch 2.13.0+cu130 sees the RTX 3080 Ti (12 GiB).
 - Author: Claude (agent, windows-ai-sandbox)
 
 ## Summary

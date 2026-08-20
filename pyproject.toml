@@ -28,3 +28,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mlpipe"]
+
+[tool.uv]
+# 2026-08-20: opt out of the sandbox's image-wide wheels-only gate (ADR-0004).
+# `uv sync` installs mlpipe itself editable, which is a source build via hatchling,
+# and uv has no per-package build allowlist — the opt-out is necessarily project-wide.
+no-build = false
