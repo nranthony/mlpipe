@@ -72,7 +72,9 @@ class TorchMLPBackend:
         device = "cuda" if torch.cuda.is_available() else "cpu"
         model = self._build(X.width, p).to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=p["lr"])
-        features = torch.from_numpy(np.ascontiguousarray(X.to_numpy().astype(np.float32)))
+        # keep the CPU tensor in the source dtype (int8 for numerai features);
+        # cast per batch on the device so RAM never holds a float32 full matrix
+        features = torch.from_numpy(np.ascontiguousarray(X.to_numpy()))
         target = torch.from_numpy(y.astype(np.float32)).unsqueeze(1)
         n = len(target)
         for _ in range(p["epochs"]):
@@ -81,7 +83,7 @@ class TorchMLPBackend:
                 idx = perm[start : start + p["batch_size"]]
                 optimizer.zero_grad()
                 loss = torch.nn.functional.mse_loss(
-                    model(features[idx].to(device)), target[idx].to(device)
+                    model(features[idx].to(device).float()), target[idx].to(device)
                 )
                 loss.backward()
                 optimizer.step()
@@ -92,11 +94,11 @@ class TorchMLPBackend:
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
         model = self._model.to(device)
-        features = torch.from_numpy(np.ascontiguousarray(X.to_numpy().astype(np.float32)))
+        features = torch.from_numpy(np.ascontiguousarray(X.to_numpy()))
         outs = []
         with torch.no_grad():
             for start in range(0, len(features), 65536):
-                outs.append(model(features[start : start + 65536].to(device)).cpu())
+                outs.append(model(features[start : start + 65536].to(device).float()).cpu())
         self._model = model.cpu()
         return torch.cat(outs).squeeze(1).numpy()
 
