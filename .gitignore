@@ -222,3 +222,12 @@ data/
 store/
 manifests/
 mlruns/
+
+# Agent-native conventions (see AGENTS.md)
+AGENTS.local.md
+**/AGENTS.local.md
+.claude/settings.local.json
+# Native plan-mode drafts — durable plans get promoted to work/NNNN-slug/
+work/plans/
+# Tool snapshot caches
+.cache/
