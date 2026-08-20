@@ -17,7 +17,6 @@ from typing import Any, Protocol, runtime_checkable
 import numpy as np
 import polars as pl
 
-
 # --------------------------------------------------------------------------- data
 
 
@@ -117,8 +116,10 @@ class Step(ABC):
 
     def signature(self, ctx: RunContext) -> str:
         """hash(step name, code version, resolved config subtree, input hashes).
-        Cycle 0 implements; concrete steps normally do not override."""
-        raise NotImplementedError("cycle 0")
+        Concrete steps normally do not override."""
+        from mlpipe.core.signature import step_signature
+
+        return step_signature(self, ctx.input_hashes(self.inputs), ctx.config)
 
     @abstractmethod
     def run(self, ctx: RunContext) -> StepResult: ...

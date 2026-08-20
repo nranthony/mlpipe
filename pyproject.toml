@@ -29,6 +29,12 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/mlpipe"]
 
+[tool.ruff.lint]
+ignore = [
+  "B008",   # typer.Option in defaults is the idiomatic typer CLI pattern
+  "RUF012", # Step declares inputs/outputs as plain class-level lists by design
+]
+
 [tool.uv]
 # 2026-08-20: opt out of the sandbox's image-wide wheels-only gate (ADR-0004).
 # `uv sync` installs mlpipe itself editable, which is a source build via hatchling,
