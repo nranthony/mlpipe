@@ -1,0 +1,30 @@
+[project]
+name = "mlpipe"
+version = "0.0.1"
+description = "Local, agent-legible modular MLOps pipeline (Numerai host repo)"
+requires-python = ">=3.11"
+dependencies = [
+  "polars>=1.0",
+  "numpy",
+  "pydantic>=2",
+  "pyyaml",
+  "joblib",
+  "typer",
+]
+
+[project.optional-dependencies]
+data = ["numerapi", "pandera", "duckdb"]
+ml = ["lightgbm", "scikit-learn", "optuna"]
+track = ["mlflow>=3"]
+torch = ["torch"]
+dev = ["pytest", "ruff"]
+
+[project.scripts]
+mlpipe = "mlpipe.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mlpipe"]

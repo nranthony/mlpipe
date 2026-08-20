@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# mlpipe run data (repo-owned, never committed)
+data/
+store/
+manifests/
+mlruns/
