@@ -1,0 +1,8 @@
+promoted:
+  mean_corr: 0.0254179704970301
+  params:
+    train.model.params.colsample_bytree: 0.19144275470337102
+    train.model.params.learning_rate: 0.016126728221813703
+    train.model.params.num_leaves: 54
+  study: lgbm-medium
+  trial: 2
