@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from mlpipe.core.interfaces import Step
 from mlpipe.steps.clean import CleanStep
+from mlpipe.steps.cvplan import CVPlanStep
 from mlpipe.steps.features import FeatureStep
 from mlpipe.steps.ingest import IngestStep
 from mlpipe.steps.validate import ValidateStep
@@ -17,9 +18,10 @@ DEFAULT_CONFIG = {
     "validate": {"row_tolerance": 0.2, "max_feature_null_frac": 0.0},
     "clean": {"cleaner": {"kind": "baseline", "feature_set": "medium"}},
     "features": {"transformer": {"kind": "passthrough"}},
+    "cvplan": {"n_folds": 4, "purge_eras": 4, "embargo_eras": 4},
     "seed": 42,
 }
 
 
 def build_steps() -> list[Step]:
-    return [IngestStep(), ValidateStep(), CleanStep(), FeatureStep()]
+    return [IngestStep(), ValidateStep(), CleanStep(), FeatureStep(), CVPlanStep()]

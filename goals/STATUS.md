@@ -1,5 +1,5 @@
 # Status
-Current cycle: 4 (DONE) — next: 5 (CV plan)
+Current cycle: 5 (DONE) — next: 6 (train, LightGBM)
 Log:
 - 2026-08-20: Bootstrap skeleton delivered to repo root. Cycle 0 attempted; blocked
   at environment provisioning (registries closed in sandbox, polars absent from the
@@ -13,3 +13,4 @@ Log:
 - 2026-08-20: Cycle 3 complete (closed after checkpoint): CleanStep with pydantic discriminated-union cleaner config (baseline|minimal), pure polars-expression cleaners in a kind->impl registry, pipeline now validates/resolves step config_model subtrees before any step runs. All 26 unit/property tests pass (byte-identical reruns, cleaner swap changes hash, bad config dies pre-run). REMAINING for DoD: real-data CLI run (clean on v5.2 medium set), rerun cache-hit proof, --set cleaner swap via CLI, then close the cycle.
 - 2026-08-20: Cycle 3 closed. Real v5.2 run: clean success on medium set (sig b06fd957), rerun cached, CLI swap --from clean --set clean.cleaner.kind=minimal re-ran only clean with upstream from cache and changed the output hash (1bc1eb83). 47 GB RAM / 16 cores available for the training cycles.
 - 2026-08-20: Cycle 4 complete. FeatureStep: sklearn-protocol transformer (passthrough | standard_scaler discriminated union), fit on train ONLY, joblib artifact travels with the model. CleanStep extended with clean_validation (same stateless exprs) so validation features exist for the skew-guard acceptance test. Tests prove: transformer round-trips via store, loaded transformer reproduces pipeline validation features, no leakage (stats = train-only means, != combined). Real run: features success on medium set (passthrough, int8 preserved); clean_table re-produced identical hash ea77b6cf after code change = byte-determinism on real data. 5 new tests; 31 total.
+- 2026-08-20: Cycle 5 complete. CVPlanStep: era-aware purged+embargoed folds over contiguous era blocks; FoldPlan artifact (int32 indices, joblib) with plan_hash over (era list, cv config) only — proven to change iff eras or config change, invariant to row counts. assert_same_plan() guard for comparisons. Real run: 4 folds / purge 4 / embargo 4 over v5.2 train eras (sig 7708cb23, plan artifact 2fff1bbe); rerun cached. 5 new tests; 36 total.
