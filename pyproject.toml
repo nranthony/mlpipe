@@ -13,11 +13,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-data = ["numerapi", "pandera", "duckdb"]
-ml = ["lightgbm", "scikit-learn", "optuna"]
-track = ["mlflow>=3"]
-torch = ["torch"]
-dev = ["pytest", "ruff"]
+data = ["numerapi", "pandera[polars]", "duckdb"]   # cycles 1-3
+ml = ["lightgbm", "scikit-learn", "optuna"]        # scikit-learn needed from cycle 4
+track = ["mlflow>=3", "plotly"]                    # cycle 7: eval reports + tracker
+torch = ["torch"]                                  # cycle 8
+dev = ["pytest", "hypothesis", "ruff"]
 
 [project.scripts]
 mlpipe = "mlpipe.cli:app"

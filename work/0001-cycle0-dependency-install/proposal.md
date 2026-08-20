@@ -23,11 +23,19 @@ Verified 2026-08-20 inside the sandbox:
 
 ## Proposal
 
-On the host (any one of these unblocks the cycle):
+2026-08-20 update: all cycles (0-10) scanned; the full dependency set is now
+declared in `pyproject.toml` (added `plotly` to `track`, `pandera[polars]`,
+`hypothesis` to `dev`). `uv lock` / `uv sync` re-attempted in-sandbox after human
+approval: still permission-denied — install remains a host-side step.
+
+On the host (any one of these unblocks all cycles at once):
 
 1. **Preferred:** with network available, in the repo root run
-   `uv lock` then `uv sync --extra dev`, and commit `uv.lock`. Future agent runs can
-   then use `uv sync --frozen` / `uv run pytest` offline.
+   `uv lock` then `uv sync --all-extras` (drop `--extra torch` from that if the
+   ~2.5 GB CUDA download should wait until cycle 8: use
+   `uv sync --extra data --extra ml --extra track --extra dev`), and commit
+   `uv.lock`. Future agent runs can then use `uv sync --frozen` / `uv run pytest`
+   offline.
 2. Or temporarily open PyPI to the sandbox and tell the agent to sync.
 3. Or seed `/root/.cache/uv` with current index metadata plus the missing wheels
    (at minimum polars) so `uv lock --offline` can resolve.
