@@ -39,6 +39,7 @@ first. Work proceeds in cycles defined by `goals/cycleN_*.md`, one cycle at a ti
   holds the founding decisions — changing one of those requires a new ADR)
 - Proposals & in-flight items that aren't a cycle → [work/](work/)
   (`NNNN-slug/`: proposal → spec → plan → notes; archive on completion)
+- Promoted baseline (written by `mlpipe tune`) → [baselines.yaml](baselines.yaml)
 - Template extraction ownership zones → [TEMPLATE_OWNERSHIP.md](TEMPLATE_OWNERSHIP.md)
 - Repo procedures → [.claude/skills/](.claude/skills/) (e.g. `/next-cycle`); shared
   procedures (`/myconv:make-plan`, `/myconv:wrap-up`, …) arrive via the myconv plugin,
@@ -59,8 +60,8 @@ first. Work proceeds in cycles defined by `goals/cycleN_*.md`, one cycle at a ti
   FoldPlan). A `torch.Tensor` in a port signature is a bug.
 - Config changes go through pydantic schemas. If a new option isn't representable in
   the schema, extend the schema first; never bypass validation.
-- Every run goes through the CLI (`mlpipe run ...`), never by importing internals —
-  this is what guarantees a manifest exists for every execution.
+- Every run goes through the CLI (`mlpipe run` / `tune` / `predict` / `lineage`),
+  never by importing internals — this guarantees a manifest exists for every execution.
 - GPU budget is 12 GB VRAM. Flag any model config that would exceed it before running.
 - No hosted/cloud storage of run data. Local only. Never commit secrets.
 
