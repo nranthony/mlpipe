@@ -1,8 +1,15 @@
 # ADR-0002: Pipeline contract amendments discovered during the build
 
-- Status: Proposed
+- Status: Rejected — resolved by editing DESIGN.md §2 directly (2026-08-21)
 - Date: 2026-08-21
 - Deciders: nanthony + Claude (build cycles 3-6, 2026-08-20)
+
+> **Why rejected:** these changes were consequences of acceptance criteria
+> already written in the goal files, not relitigations of DESIGN.md §0 —
+> so they belong in the living contract table, not a decision record. The
+> calibration this sets: contract corrections driven by existing acceptance
+> criteria go in DESIGN.md; ADRs are for actual changes of direction.
+> DESIGN.md now states this graded authority explicitly in its preamble.
 
 ## Context
 

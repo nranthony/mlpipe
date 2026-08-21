@@ -19,8 +19,9 @@ sandbox); this block is only the standing reminder:
 # mlpipe
 
 A local, modular, agent-operated MLOps pipeline (Numerai host repo, later extracted as
-a Copier template). [DESIGN.md](DESIGN.md) is the authoritative system design — read it
-first. Work proceeds in cycles defined by `goals/cycleN_*.md`, one cycle at a time.
+a Copier template). [DESIGN.md](DESIGN.md) is the design reference — read it first;
+its §0 decisions stand until an ADR changes them, and its contracts describe the
+current system. Work proceeds in cycles defined by `goals/cycleN_*.md`, one at a time.
 
 ## Start here (session ritual)
 

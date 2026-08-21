@@ -1,4 +1,10 @@
-# mlpipe — design specification
+# mlpipe — design reference
+
+**Status of this document:** the design reference, not law. §0's decisions are
+strong defaults that stand until an ADR (docs/adr/) changes them; §2's contracts
+describe the current system and are kept true to the code; §8's landscape facts
+are dated snapshots. Reality (code, tests, manifests) outranks this text — when
+they disagree, fix the text.
 
 A minimal, agent-legible MLOps pipeline for a personal repo. Mirrors the elegant core of
 SageMaker Pipelines / Vertex AI (typed steps, content-hash caching, lineage records)
@@ -55,14 +61,14 @@ walkable from any model back to raw data + config + commit.
 
 | # | Block | Contract (inputs → outputs) | Notes |
 |---|-------|------------------------------|-------|
-| 1 | Ingest & snapshot | source config → `raw_train`, `raw_validation`, `raw_live` | numerapi pull, freeze as parquet, hash. Record dataset name/version/size. |
-| 2 | Validate | raw tables → `validated_*` (pass-through) + validation report | pandera schemas: columns, dtypes (int8!), null bounds, era monotonicity. Hard gate — fail loud. |
-| 3 | Clean & transform | validated → `clean_table` | Stateless only. Same input ⇒ same output. Polars exprs. |
-| 4 | Feature engineering | clean → `feature_table` + `fitted_transformer` | Fitted transforms learn from train only. The transformer is a versioned artifact that travels with the model (train/serve skew guard). |
+| 1 | Ingest & snapshot | source config → `raw_train`, `raw_validation`, `raw_live`, `features_meta` | numerapi pull into the shared download cache, freeze exact bytes, hash. Record dataset name/version/size in the manifest. |
+| 2 | Validate | raw tables → `validated_*` (zero-copy aliases) + `validation_report` | pandera schemas: columns, dtypes (int8!), null bounds, era monotonicity, row counts vs previous snapshot. Hard gate — fail loud. |
+| 3 | Clean & transform | validated → `clean_table` + `clean_validation` | Stateless only. Same input ⇒ same output. Polars exprs; validation cleaned with the same exprs so downstream skew checks have a target. |
+| 4 | Feature engineering | clean → `feature_table` + `feature_validation` + `fitted_transformer` | Fitted transforms learn from train only. The transformer is a versioned artifact that travels with the model; `feature_validation` is what the skew guard compares against. |
 | 5 | Split / CV plan | feature table + cv config → `fold_plan` | Era-aware, purged, embargoed. The plan is an artifact with its own hash; model comparisons must cite the same plan hash. |
-| 6 | Train & tune | features + fold_plan + model config → `model`, `oof_preds` | Via ModelBackend port. Optuna for tuning (separate sub-cycle). |
-| 7 | Evaluate | model + oof_preds + fold_plan → `eval_report` (metrics JSON + plotly HTML) | Era-wise corr, sharpe, drawdown, feature exposure. Log metrics to MLflow. |
-| 8 | Register & package | model + transformer + eval → registered model version | MLflow registry; bundle = model + fitted transformer + feature list + plan hash. |
+| 6 | Train & tune | features + fold_plan + model config → `model`, `oof_preds` | Via ModelBackend port. `model` is a `{full, fold_models}` bundle so stored state alone reproduces OOF (5x size, no retraining needed for audit). Optuna via `mlpipe tune`. |
+| 7 | Evaluate | model + oof_preds + fold_plan → `eval_report` + `eval_chart` (metrics JSON + standalone plotly HTML) | Era-wise corr, sharpe, drawdown, feature exposure. Log metrics to MLflow. |
+| 8 | Register & package | model + transformer + eval → `model_bundle` + registered model version | MLflow registry points at the store bundle: model + fitted transformer + feature list + cleaner recipe + plan hash. |
 
 The stateless/stateful boundary between blocks 3 and 4 is deliberate: block 3 caches on
 content alone; block 4 produces fitted state that must be versioned with the model.
