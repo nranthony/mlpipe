@@ -14,6 +14,11 @@ REGISTRY = {
 }
 
 
+def module_for(kind: str) -> str:
+    """Module name backing a kind, without importing it (used by signatures)."""
+    return REGISTRY[kind].split(":")[0]
+
+
 def resolve(kind: str) -> type:
     target = REGISTRY[kind]
     module, cls = target.split(":")

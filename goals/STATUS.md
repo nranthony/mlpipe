@@ -20,3 +20,14 @@ Log:
 - 2026-08-20: Cycle 10 complete. RegisterStep bundles model+transformer+feature list+cleaner recipe+plan hash as a store artifact; MLflow registry version tags its content hash. Real proof: fresh process `mlpipe predict --name numerai-lgbm` loaded v1 by name, predicted 6,997 live rows from the raw_live snapshot (no training internals); `mlpipe lineage <bundle>` walks register->evaluate->train->features->clean->validate->ingest to the raw snapshot hashes.
 - 2026-08-20: Cycle 9 complete. `mlpipe tune`: Optuna study over the config-declared space (num_leaves, learning_rate, colsample_bytree), each trial a pipeline run from train with upstream cached; persistent storage sqlite:///mlruns/optuna.db (resume proven by tests); trials tagged lgbm-medium-trialN in MLflow. Real study: 3 trials at 50 trees, best trial 2 (num_leaves 54, lr 0.0161, colsample 0.191) mean_corr 0.02542 -> promoted to baselines.yaml.
 - 2026-08-20: BUILD COMPLETE. All 11 cycles done in one day. Final state: 53 tests green, ruff clean, core 638 lines (ceiling 700 — interfaces+tracker included), store 11 GB, full provenance from any registered model version back to the raw snapshot. Registered: numerai-lgbm v1 (mean_corr 0.02793, sharpe 1.711, plan 48de731b), numerai-torch v1 (0.01406). Pinned baseline: lgbm-medium trial 2. Known follow-ups: backend/helper code not in step signatures (only the step's own module is hashed); tune --from train means cleaner overrides in tune are inert; ZenML spike skipped (install = human boundary).
+- 2026-08-24: Gap 1 from work/0002 fixed — step code hashing widened from the step's own
+  module to its source-file closure (own module + reachable `mlpipe.steps.*`/
+  `mlpipe.backends.*` + lazily-resolved modules declared via the new `Step.code_deps`;
+  `TrainStep` declares the configured backend). Closure found via `find_spec`+`ast`, never
+  imported, so cache-hit signatures don't load torch. `mlpipe.core.*` excluded by design
+  (DESIGN.md §1 updated). 10 new tests, 63 total green, ruff clean. Demo proof: signature
+  changed (`e94c3661`->`ab93bc8a`) so the step recomputed, output hashes byte-identical,
+  store still 37 files, rerun cached — invalidation costs compute, not disk. NOT yet
+  re-run on real data: the next `mlpipe run` recomputes ingest->register (~1.5-2h).
+  Nothing re-promoted; baselines.yaml untouched. Core now 697/700 lines: the next core
+  change needs the mlflow_tracker-out-of-core trade (or an ADR raising the ceiling).

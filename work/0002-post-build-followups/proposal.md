@@ -1,6 +1,7 @@
 # Proposal: post-build follow-ups and the choice of next direction
 
-- Status: Draft — awaiting a direction decision from nanthony
+- Status: In review — **gap 1 fixed 2026-08-24** (see "Resolution" below); gaps 2 and 3
+  still open, direction for the rest still awaiting nanthony
 - Author: Claude (agent, windows-ai-sandbox)
 - Date: 2026-08-22 (session `numerai-mlpipe-testing`)
 
@@ -58,6 +59,37 @@ survives the session.
 A fifth item was deferred during the build and is not proposed here, only recorded:
 the **ZenML orchestrator-exit-door spike** was skipped because the install is a
 sandbox human boundary. It stays skipped until the exit door actually needs proving.
+
+## Resolution — gap 1 (2026-08-24)
+
+Fixed by widening the code hash from one file to a **source-file closure**: the step's
+own module, plus everything under `mlpipe.steps.*` / `mlpipe.backends.*` it can reach by
+import, plus lazily-resolved modules a step declares through the new `Step.code_deps`
+hook. `TrainStep.code_deps` returns the registry module for the configured `model.kind`,
+which is what the static parser cannot see. Modules are located with `find_spec` and read
+with `ast` — nothing is imported, so signatures stay computable on a cache hit without
+loading lightgbm or torch (test-enforced).
+
+`mlpipe.core.*` is excluded by design, recorded in DESIGN.md §1: core is the
+orchestrator, not the computation, and including it would invalidate every artifact on
+any core edit. The residual risk is a core serialization change altering output bytes
+without changing a signature — bounded by tests and by `git_commit` in every manifest.
+This exclusion is the one part worth revisiting if it ever bites.
+
+Verified on the demo pipeline: signatures changed (`make_data` `e94c3661` → `ab93bc8a`),
+so the first run recomputed rather than cache-hitting, but the output content hashes were
+byte-identical (`5109abe5`, `b3cee3df`) and the store stayed at 37 files. Second run
+cache-hit under the new signature. **The invalidation costs compute, not disk.**
+
+Answering this item's own open question about the 11 GB store: no re-run was triggered.
+The next real `mlpipe run` recomputes ingest→register (~1.5-2h, dominated by the ~64-min
+LightGBM fit) and will re-write byte-identical artifacts to the same hashes for every
+step whose behaviour did not actually change.
+
+**Left tight:** core is now 697/700 lines. The change fits under the ceiling, so no ADR
+was required, but the next core edit breaches it. The obvious trade to propose then is
+moving `core/mlflow_tracker.py` (55 lines) out of core — it is an adapter, not core
+orchestration, and core's own rules already push tracker specifics to the edge.
 
 ## Open questions
 

@@ -14,7 +14,7 @@ import numpy as np
 import polars as pl
 from pydantic import BaseModel, Field
 
-from mlpipe.backends.registry import resolve
+from mlpipe.backends.registry import module_for, resolve
 from mlpipe.core.interfaces import Step, StepResult
 
 
@@ -44,6 +44,11 @@ class TrainStep(Step):
     inputs = ["feature_table", "fold_plan"]
     outputs = ["model", "oof_preds"]
     config_model = TrainConfig
+
+    def code_deps(self, cfg):
+        """The backend is resolved lazily through the registry, so the static
+        parser cannot see it — declare the configured kind's module explicitly."""
+        return [module_for(TrainConfig.model_validate(cfg or {}).model.kind)]
 
     def run(self, ctx):
         cfg = TrainConfig.model_validate(ctx.config.get(self.name, {}))

@@ -41,7 +41,14 @@ Declares `inputs: list[str]` and `outputs: list[str]` (artifact keys). Never tou
 filesystem, tracker SDK, or model libraries directly — only `RunContext`.
 
 **Signature** — hash over (step name, step code version, resolved config subtree for the
-step, input artifact hashes). Code version = hash of the step's source file(s).
+step, input artifact hashes). Code version = hash of the step's source file **closure**:
+its own module, every module under `mlpipe.steps.*` / `mlpipe.backends.*` reachable from
+it by import, and any module it resolves lazily and declares via `Step.code_deps` (the
+model backend for the configured `kind`). The closure is found by `find_spec` + `ast`
+parsing, never by importing — a signature must be computable on a cache hit without
+pulling in lightgbm or torch. `mlpipe.core.*` is deliberately **excluded**: it is the
+orchestrator, not the computation, and including it would invalidate every artifact on
+any core edit; core is covered by tests and by the `git_commit` in every manifest.
 
 **Caching** — before running a step, look up its signature in the manifest index. If a
 manifest exists and all its output hashes are present in the store, skip and return the

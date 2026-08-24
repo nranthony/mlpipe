@@ -114,6 +114,12 @@ class Step(ABC):
     inputs: list[str]
     outputs: list[str]
 
+    def code_deps(self, cfg: dict[str, Any]) -> list[str]:
+        """Module names this step resolves at runtime rather than importing, e.g.
+        a model backend chosen by config. Statically imported modules are found
+        automatically; override only for lazy lookups the parser cannot see."""
+        return []
+
     def signature(self, ctx: RunContext) -> str:
         """hash(step name, code version, resolved config subtree, input hashes).
         Concrete steps normally do not override."""
