@@ -42,9 +42,10 @@ current system. Work proceeds in cycles defined by `goals/cycleN_*.md`, one at a
   (`NNNN-slug/`: proposal → spec → plan → notes; archive on completion)
 - Promoted baseline (written by `mlpipe tune`) → [baselines.yaml](baselines.yaml)
 - Template extraction ownership zones → [TEMPLATE_OWNERSHIP.md](TEMPLATE_OWNERSHIP.md)
-- Repo procedures → [.claude/skills/](.claude/skills/) (e.g. `/next-cycle`); shared
-  procedures (`/myconv:make-plan`, `/myconv:wrap-up`, …) arrive via the myconv plugin,
-  never copied into this repo
+- Repo procedures → `.claude/skills/` (currently none: `/next-cycle` was retired with
+  the cycle build; the directory returns when a repo-specific procedure does, e.g.
+  `/template-sync`). Shared procedures (`/myconv:make-plan`, `/myconv:wrap-up`, …)
+  arrive via the myconv plugin, never copied into this repo
 - Human onboarding → [README.md](README.md)
 
 ## Hard rules

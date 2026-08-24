@@ -7,7 +7,8 @@ Zones (see DESIGN.md §7). Declared now so extraction later is a git mv, not a r
 - src/mlpipe/cli.py
 - AGENTS.md, CLAUDE.md (thin @AGENTS.md stub), DESIGN.md, TEMPLATE_OWNERSHIP.md
 - tests/test_cycle0_spine.py
-- .claude/skills/**  (repo procedures, e.g. next-cycle; template-sync once it exists)
+- .claude/skills/**  (repo procedures; empty since next-cycle was retired with the
+  cycle build — the zone stands for template-sync once it exists)
 - .claude/settings.json
 
 ## skeleton  (template provides once at generation; repo owns thereafter)
