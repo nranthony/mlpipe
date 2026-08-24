@@ -91,6 +91,13 @@ was required, but the next core edit breaches it. The obvious trade to propose t
 moving `core/mlflow_tracker.py` (55 lines) out of core — it is an adapter, not core
 orchestration, and core's own rules already push tracker specifics to the edge.
 
+## Related items
+
+- [work/0003](../0003-subset-smoke-runs/proposal.md) — subset "smoke" runs. Separate work
+  (new capability, not a build defect), but coupled in time: the `clean.py` era knob it
+  proposes is free to land *before* the next real run, since gap 1 already invalidated
+  everything, and costs a second full recompute if it lands after.
+
 ## Open questions
 
 - Which direction (or ordering) does nanthony want? Asked at the end of the
