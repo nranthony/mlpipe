@@ -23,7 +23,7 @@ dev = ["pytest", "hypothesis", "ruff"]
 mlpipe = "mlpipe.cli:app"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling==1.32.0"]  # exact pin: build deps are not in uv.lock (ADR-0003)
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
@@ -36,7 +36,29 @@ ignore = [
 ]
 
 [tool.uv]
-# 2026-08-20: opt out of the sandbox's image-wide wheels-only gate (ADR-0004).
-# `uv sync` installs mlpipe itself editable, which is a source build via hatchling,
-# and uv has no per-package build allowlist — the opt-out is necessarily project-wide.
-no-build = false
+# Deliberately absent: `no-build`. This project runs under the sandbox's wheels-only
+# default (`no-build = true` in /etc/uv/uv.toml): every dependency in uv.lock ships a
+# wheel, and uv exempts the project's own editable build from the gate. A new
+# sdist-only dependency will fail to install there; that is the gate working. See
+# docs/adr/0003-dependency-resolution-hardening.md before adding `no-build = false`.
+#
+# The one build that remains is mlpipe itself, via hatchling. Its full requirement
+# set is pinned here because uv.lock does not cover build dependencies. Bump
+# together with the hatchling pin in [build-system].
+build-constraint-dependencies = [
+  "hatchling==1.32.0",
+  "packaging==26.3",
+  "pathspec==1.1.1",
+  "pluggy==1.6.0",
+  "tomlkit==0.15.1",
+  "trove-classifiers==2026.6.1.19",
+]
+# Resolution quarantine (ADR-0003): ignore anything published after this instant.
+# Set to ~14 days before the day you re-lock; never to "now".
+exclude-newer = "2026-09-21T00:00:00Z"
+
+# Explicit default index, so resolution does not follow ambient uv/pip config.
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true

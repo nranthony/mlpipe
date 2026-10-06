@@ -31,3 +31,12 @@ Log:
   re-run on real data: the next `mlpipe run` recomputes ingest->register (~1.5-2h).
   Nothing re-promoted; baselines.yaml untouched. Core now 697/700 lines: the next core
   change needs the mlflow_tracker-out-of-core trade (or an ADR raising the ceiling).
+- 2026-10-06: Dependency-resolution hardening (ADR-0003), from a `depaudit posture` review.
+  hatchling pinned to 1.32.0 with its five requirements under `build-constraint-dependencies`
+  (build deps are not in uv.lock); `no-build = false` removed — the project runs under the
+  sandbox's wheels-only default, since uv exempts the project's own editable build;
+  `exclude-newer` pin and explicit PyPI default index added. Re-locked via with-egress: 147
+  packages, no version changes. `.venv-sandbox` (found empty) repopulated with
+  `uv sync --frozen --all-extras` on Python 3.13; 63 tests green. Use `uv run --no-sync`
+  from here on. Also resolves the dangling "ADR-0004" reference flagged in work/0004. NOT
+  done: CVE scan of uv.lock; depaudit re-run.

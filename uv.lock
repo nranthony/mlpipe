@@ -7,6 +7,19 @@ resolution-markers = [
     "python_full_version < '3.12'",
 ]
 
+[options]
+exclude-newer = "2026-09-29T11:38:36Z"
+
+[manifest]
+build-constraints = [
+    { name = "hatchling", specifier = "==1.32.0" },
+    { name = "packaging", specifier = "==26.3" },
+    { name = "pathspec", specifier = "==1.1.1" },
+    { name = "pluggy", specifier = "==1.6.0" },
+    { name = "tomlkit", specifier = "==0.15.1" },
+    { name = "trove-classifiers", specifier = "==2026.6.1.19" },
+]
+
 [[package]]
 name = "aiohappyeyeballs"
 version = "2.7.1"
