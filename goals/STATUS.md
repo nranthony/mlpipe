@@ -40,3 +40,14 @@ Log:
   `uv sync --frozen --all-extras` on Python 3.13; 63 tests green. Use `uv run --no-sync`
   from here on. Also resolves the dangling "ADR-0004" reference flagged in work/0004. NOT
   done: CVE scan of uv.lock; depaudit re-run.
+- 2026-10-19: Direction set (work/0006 accepted): mlpipe is a generic library, not a
+  Numerai project; Numerai becomes `examples/numerai/` (a real-data test case);
+  tournament work lives in the numerai repo. ADR-0004 replaces the 400/700 line ceiling
+  with a test-enforced core import boundary (`tests/test_core_boundary.py`) plus a soft
+  ~600-line signal over the orchestration modules (511 today). ADR-0005: library-first,
+  Copier template for scaffolding only. ADR-0006: explicit `mlpipe promote` (not yet
+  built). `MlflowTracker` moved from `core/` to `mlpipe.trackers` (core 697 -> 642).
+  DESIGN.md §0/§1/§4/§7, AGENTS.md, TEMPLATE_OWNERSHIP.md updated. NOT verified by
+  pytest: `.venv-sandbox` was empty again (work/0005 Q4 recurred), and only a stdlib AST
+  check ran (0 boundary violations). Human ask: host-side `uv sync --frozen --all-extras`.
+  Plan: work/0006/plan.md.

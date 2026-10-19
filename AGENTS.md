@@ -1,7 +1,8 @@
 # mlpipe
 
-A local, modular, agent-operated MLOps pipeline (Numerai host repo, later extracted as
-a Copier template). [DESIGN.md](DESIGN.md) is the design reference — read it first;
+A local, modular, agent-operated MLOps pipeline, shipped as a generic library that host
+repos pin to a git tag (ADR-0005). Numerai is the real-data example and test case, not
+the product; tournament work lives in the numerai repo. [DESIGN.md](DESIGN.md) is the design reference — read it first;
 its §0 decisions stand until an ADR changes them, and its contracts describe the
 current system. Work proceeds in cycles defined by `goals/cycleN_*.md`, one at a time.
 
@@ -38,8 +39,11 @@ current system. Work proceeds in cycles defined by `goals/cycleN_*.md`, one at a
   step only. Never let pandas or DuckDB types leak across a boundary.
 - `src/mlpipe/core/` stays free of Numerai-specific imports. Domain code lives in
   `src/mlpipe/steps/` and `src/mlpipe/backends/`.
-- Core line budget: 400 target, 700 ceiling. If a change would exceed it, stop and
-  write an ADR proposing the trade instead of committing the change.
+- Core boundary (ADR-0004): `src/mlpipe/core/` imports only the stdlib, the base deps
+  and itself (`tests/test_core_boundary.py`). Adapters live outside core
+  (`mlpipe.trackers`, `mlpipe.backends`). Size is a soft signal: if the orchestration
+  modules (context, manifest, pipeline, signature, store) pass ~600 lines, justify it
+  in one sentence in the STATUS.md entry.
 - ModelBackend method signatures may only mention our types (polars, numpy, Path,
   FoldPlan). A `torch.Tensor` in a port signature is a bug.
 - Config changes go through pydantic schemas. If a new option isn't representable in

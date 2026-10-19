@@ -90,6 +90,11 @@ shows how much of the advisory load sits in that subtree.
    the wrapper warns about them on every mlpipe egress window.
 4. Why was `.venv-sandbox` an empty Python 3.13 shell dated 2026-09-15? Cause not
    established; repopulated 2026-10-06. Worth knowing if it recurs.
+   **It recurred on 2026-10-19:** `uv run --no-sync pytest` printed "Creating virtual
+   environment at: .venv-sandbox" (Python 3.13.16) and then could not find `pytest`,
+   so the populated venv from 10-06 was gone. The in-sandbox
+   `uv sync --frozen --all-extras --offline` was denied. Ask recorded in
+   work/0006 plan.md "Blockers".
 
 ## Alternatives
 

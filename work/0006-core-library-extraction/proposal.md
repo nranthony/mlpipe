@@ -1,7 +1,8 @@
 # Proposal: extract the core as a library (not a template), with numerai as first consumer
 
-- Status: Draft — awaiting nanthony's answers to "Open questions"; nothing below has
-  started
+- Status: Accepted → ADR-0004, ADR-0005, ADR-0006 (2026-10-19). Answers: no new
+  repo; this repo *is* the library, with Numerai moved to `examples/`. Execution:
+  [plan.md](plan.md)
 - Author: Claude (agent, windows-ai-sandbox)
 - Date: 2026-10-19
 - Related: [work/0004](../0004-consistency-review-and-orchestrator-question/proposal.md)

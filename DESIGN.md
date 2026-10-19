@@ -8,13 +8,16 @@ they disagree, fix the text.
 
 A minimal, agent-legible MLOps pipeline for a personal repo. Mirrors the elegant core of
 SageMaker Pipelines / Vertex AI (typed steps, content-hash caching, lineage records)
-without the cloud plumbing. Everything local. Target repo: Numerai (first host), later
-extracted as a Copier template for other repos.
+without the cloud plumbing. Everything local. A generic library that host repos install
+from a pinned git tag (ADR-0005); Numerai is its real-data example and test case
+(moving to `examples/numerai/`), not its purpose.
 
 ## 0. Decisions already made (do not relitigate without an ADR)
 
-- **Orchestrator:** custom minimal core (~400 lines target, hard ceiling 700). No ZenML,
-  no Kedro. Steps talk only to `RunContext`, which keeps a future ZenML shim cheap.
+- **Orchestrator:** custom minimal core. No ZenML, no Kedro. Steps talk only to
+  `RunContext`, which keeps a future ZenML shim cheap. Size is governed by
+  test-enforced import and surface rules, plus a soft line-count signal on the
+  orchestration modules (ADR-0004; this replaces the original 400/700 ceiling).
 - **DataFrame engine:** Polars is the canonical in-memory type crossing step boundaries.
   Parquet is the canonical at-rest format (Numerai ships v5.x as parquet, int8).
   DuckDB is permitted *inside* a step for SQL-shaped work; DuckDB types never cross a
@@ -61,8 +64,10 @@ step name, signature, timestamps, status, git commit, config hash, environment
 appears as an input hash in some later manifest → the lineage graph is implicit and
 walkable from any model back to raw data + config + commit.
 
-**Promotion** — accepting a run: tag it in MLflow and pin its config hash in
-`baselines.yaml`. The next block's iteration cycle builds on the pinned baseline.
+**Promotion** — accepting a run, only via `mlpipe promote <bundle-hash>` (ADR-0006):
+moves the MLflow `@champion` alias and writes `baselines.yaml` with the full resolved
+config, config/plan/bundle hashes, metrics and commit. The next iteration cycle builds
+on the pinned baseline. *(Implementation pending — work/0006 step 4.)*
 
 ## 2. Pipeline blocks (each = one Claude Code cycle)
 
@@ -109,7 +114,8 @@ protocol. Plotting/metrics hide behind plain functions, not classes.
 - **Adapter (port):** model families — GBM / Torch / sklearn via ModelBackend.
 - **Pick-once (boundary-wrapped):** DataFrame engine (Polars; Parquet keeps the at-rest
   format engine-neutral). Tracker (demoted to a view, so swappable to Aim later).
-- **Keep-tiny (effectively unswappable):** the core itself. Budget enforced.
+- **Keep-tiny (effectively unswappable):** the core itself. Boundary enforced by tests
+  (ADR-0004).
 
 ## 5. Agent surface
 
@@ -134,13 +140,22 @@ protocol. Plotting/metrics hide behind plain functions, not classes.
 Each cycle's goal file is in `goals/`. A cycle is done when its acceptance tests pass
 and the block can be iterated via the CLI with upstream served from cache.
 
-## 7. Template extraction (later — do not do this early)
+## 7. Distribution: library first, scaffolding template later (ADR-0005)
 
-Extract to a Copier template only after the core survives several real iteration
-loops. Until then: keep `src/mlpipe/core/` strictly free of Numerai-specific imports so
-the eventual boundary is a `git mv`, not a refactor. Ownership zones are declared in
-TEMPLATE_OWNERSHIP.md from day one. Template releases carry an agent-readable
-changelog; target repos sync via `copier update` driven by a `/template-sync` command.
+The engine (`core/`, `cli.py`, generic backends and trackers behind extras) ships as
+this repo's `mlpipe` distribution. Host repos pin it to a git tag and get fixes as
+version bumps, not merges. Host pipelines and backends register through entry points
+(`mlpipe.pipelines`, `mlpipe.backends`). Before the first tag:
+
+- the core is domain-neutral: no era concepts in ports, and the import boundary is
+  test-enforced;
+- the Numerai pipeline lives in `examples/numerai/`;
+- a second, non-Numerai smoke pipeline passes.
+
+A Copier template, if built, carries **scaffolding only**: agent docs, ADR and `work/`
+conventions, a config skeleton and CLI wiring. It is built only after a host repo has
+adopted the library, and synced via `copier update` driven by a `/template-sync`
+procedure. Its zones are in TEMPLATE_OWNERSHIP.md. Rollout: work/0006 plan.
 
 ## 8. Known landscape facts (as of Aug 2026, verified)
 

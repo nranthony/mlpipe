@@ -46,7 +46,7 @@ def _load_module_and_config(pipeline: str, config: Path | None):
 
 def _make_tracker(cfg: dict):
     if cfg.get("tracker", {}).get("kind") == "mlflow":
-        from mlpipe.core.mlflow_tracker import MlflowTracker
+        from mlpipe.trackers.mlflow_tracker import MlflowTracker
 
         return MlflowTracker(
             cfg["tracker"].get("uri", "sqlite:///mlruns/mlflow.db"),

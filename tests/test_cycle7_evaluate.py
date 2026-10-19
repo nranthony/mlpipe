@@ -6,7 +6,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from mlpipe.core.mlflow_tracker import MlflowTracker
+from mlpipe.trackers.mlflow_tracker import MlflowTracker
 from mlpipe.core.pipeline import Pipeline
 from mlpipe.core.store import LocalCasStore
 from mlpipe.steps.cvplan import CVConfig, build_plan

@@ -1,29 +1,33 @@
-# Ownership map (governs template extraction and future /template-sync)
+# Ownership map (library + future scaffolding template)
 
-Zones (see DESIGN.md §7). Declared now so extraction later is a git mv, not a refactor.
+Revised by ADR-0005: the engine is a **library** that host repos install. A Copier
+template, if built, carries scaffolding only. See DESIGN.md §7.
 
-## template-owned  (updates flow in from the template; repos should not edit)
+## library  (ships in the `mlpipe` distribution; host repos never edit it)
 - src/mlpipe/core/**
 - src/mlpipe/cli.py
-- AGENTS.md, CLAUDE.md (thin @AGENTS.md stub), DESIGN.md, TEMPLATE_OWNERSHIP.md
-- tests/test_cycle0_spine.py
-- .claude/skills/**  (repo procedures; empty since next-cycle was retired with the
-  cycle build — the zone stands for template-sync once it exists)
+- src/mlpipe/trackers/**, generic src/mlpipe/backends/**
+- tests for the above (tests/test_cycle0_spine.py, tests/test_core_boundary.py,
+  tests/test_signature_scope.py)
+
+## template-owned  (future scaffolding template; updates flow in, repos should not edit)
+- the managed sections of AGENTS.md; CLAUDE.md (thin @AGENTS.md stub)
+- .claude/skills/** (repo procedures, e.g. /template-sync once it exists)
 - .claude/settings.json
 
 ## skeleton  (template provides once at generation; repo owns thereafter)
-- src/mlpipe/steps/**
-- src/mlpipe/backends/**
+- the host package's steps/ and backends/ (here: examples/numerai/ once moved)
 - configs/**
-- goals/**
+- goals/**, DESIGN.md (project sections)
 - work/README.md, docs/adr/0000-template.md
 
-## repo-owned  (template never touches)
+## repo-owned  (template and library never touch)
 - data/**, store/**, manifests/**, mlruns/**
 - baselines.yaml
 - experiments/**, notebooks/**
 - docs/adr/** (except the template), work/** (except README), AGENTS.local.md
 
-Conflict policy for agents: template-owned → take the template's side unless tests
-break; skeleton → preserve local, port patterns manually if the template changelog
-says they matter; repo-owned → never modified by sync.
+Conflict policy for agents: library → change it here, release a tag, and host repos
+bump the pin. template-owned → take the template's side unless tests break.
+skeleton → preserve local, and port patterns manually if the template changelog says
+they matter. repo-owned → never modified by sync.
