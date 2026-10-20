@@ -172,3 +172,52 @@ def test_default_manifest_log_is_per_pipeline(tmp_path, monkeypatch):
     assert (tmp_path / "manifests" / "demo" / "index.jsonl").exists()
     assert not (tmp_path / "manifests" / "index.jsonl").exists()
     assert (tmp_path / "store").is_dir()  # the store stays shared
+
+
+# ---------------------------------------------------------------- manifest hardening (7b)
+
+
+class Boom(Summarize):
+    def run(self, ctx):
+        raise ValueError("bad input shape (3, 0)")
+
+
+def test_failed_manifest_carries_error_and_traceback(env):
+    store, tmp = env
+    pipe = Pipeline([MakeData(), Boom()], store, tmp / "m", {"make_data": {"rows": 2}})
+    with pytest.raises(ValueError):
+        pipe.run(seeds=[seed_artifact(store)])
+    failed = [m for m in pipe.log.entries() if m["status"] == "failed"]
+    assert failed[-1]["error"] == "ValueError: bad input shape (3, 0)"
+    assert "raise ValueError" in failed[-1]["traceback"]
+
+
+def test_environment_records_runtime_and_dirty_state(env):
+    store, tmp = env
+    (m, _) = two_step(store, tmp / "m").run(seeds=[seed_artifact(store)])["manifests"]
+    envinfo = m["environment"]
+    assert {"lockfile", "lockfile_hash", "python_version", "platform", "git_dirty"} <= set(envinfo)
+    assert "seed" not in envinfo  # dropped in step 5
+
+
+def _append_many(root, n):
+    from mlpipe.core.manifest import ManifestLog
+
+    log = ManifestLog(root)
+    for i in range(n):  # records larger than a pipe/page buffer, to provoke tearing
+        log.write({"step": "s", "signature": f"{i}", "status": "success", "pad": "x" * 70_000})
+
+
+def test_concurrent_index_appends_never_interleave(tmp_path):
+    import json
+    import multiprocessing as mp
+
+    procs = [mp.get_context("fork").Process(target=_append_many, args=(tmp_path, 25))
+             for _ in range(4)]
+    for p in procs:
+        p.start()
+    for p in procs:
+        p.join()
+    lines = (tmp_path / "index.jsonl").read_text().splitlines()
+    assert len(lines) == 100
+    assert all(json.loads(line)["pad"] == "x" * 70_000 for line in lines)

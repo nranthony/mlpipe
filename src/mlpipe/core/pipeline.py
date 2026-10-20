@@ -8,6 +8,8 @@ Cache hits still write a manifest (status "cached") — every execution leaves o
 from __future__ import annotations
 
 import copy
+import platform
+import traceback
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -17,7 +19,7 @@ import yaml
 from mlpipe.core.config import validate_config
 from mlpipe.core.context import NoopTracker, RunContext
 from mlpipe.core.interfaces import Artifact, Step
-from mlpipe.core.manifest import ManifestLog, git_commit
+from mlpipe.core.manifest import ManifestLog, git_commit, git_dirty
 from mlpipe.core.signature import config_hash, config_subtree, sha256_bytes
 
 
@@ -34,9 +36,20 @@ def apply_overrides(config: dict, overrides: list[str] | None) -> dict:
     return config
 
 
+LOCKFILES = ("uv.lock", "poetry.lock", "pdm.lock", "pixi.lock", "requirements.lock")
+
+
 def environment_info() -> dict:
-    lock = Path("uv.lock")
-    return {"lockfile_hash": sha256_bytes(lock.read_bytes()) if lock.exists() else None}
+    """What ran it, beyond the signature. Computed once per run. No CUDA probe:
+    that would import torch into core (ADR-0004); backends record devices."""
+    lock = next((Path(n) for n in LOCKFILES if Path(n).exists()), None)
+    return {
+        "lockfile": lock.name if lock else None,
+        "lockfile_hash": sha256_bytes(lock.read_bytes()) if lock else None,
+        "python_version": platform.python_version(),
+        "platform": platform.platform(),
+        "git_dirty": git_dirty(),
+    }
 
 
 def _now() -> str:
@@ -78,16 +91,18 @@ class Pipeline:
         for artifact in seeds or []:
             ctx.register(artifact)
 
-        lo =names.index(from_step) if from_step else 0
+        lo = names.index(from_step) if from_step else 0
         hi = names.index(to_step) + 1 if to_step else len(self.steps)
+        env = environment_info()
 
         # Upstream of --from is resolved by signature under the CURRENT config and
         # must be a cache hit: --from asserts "upstream is cached", it never serves
         # outputs some other config produced (work/0004 C).
         upstream = [
-            self._run_step(s, ctx, config, tag, from_step=from_step) for s in self.steps[:lo]
+            self._run_step(s, ctx, config, tag, env, from_step=from_step)
+            for s in self.steps[:lo]
         ]
-        written = [self._run_step(s, ctx, config, tag) for s in self.steps[lo:hi]]
+        written = [self._run_step(s, ctx, config, tag, env) for s in self.steps[lo:hi]]
         return {"artifacts": dict(ctx.registry), "manifests": upstream + written}
 
     def _run_step(
@@ -96,6 +111,7 @@ class Pipeline:
         ctx: RunContext,
         config: dict,
         tag: str | None,
+        env: dict,
         from_step: str | None = None,
     ) -> dict:
         ctx.reset_step()
@@ -108,7 +124,7 @@ class Pipeline:
             "git_commit": git_commit(),
             "config_hash": config_hash(config, step.name),
             "config": config_subtree(config, step.name),  # what promote pins (ADR-0006)
-            "environment": environment_info(),
+            "environment": env,
             "inputs": input_hashes,
             "tag": tag,
             "started_at": started,
@@ -146,8 +162,12 @@ class Pipeline:
                 "meta": ctx.step_meta,
                 "ended_at": _now(),
             }
-        except Exception:
-            self.log.write(base | {"status": "failed", "outputs": {}, "metrics": {}, "ended_at": _now()})
+        except Exception as exc:
+            # an agent debugging from manifests must see why, not just that (0007 A1)
+            self.log.write(base | {
+                "status": "failed", "outputs": {}, "metrics": {}, "ended_at": _now(),
+                "error": f"{type(exc).__name__}: {exc}", "traceback": traceback.format_exc(),
+            })
             self.tracker.end_run("failed")
             raise
         self.log.write(record)

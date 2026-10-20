@@ -67,7 +67,9 @@ that a different config produced.
 
 **Run manifest** — one JSON file per step execution, append-only, in `manifests/`:
 step name, signature, timestamps, status, git commit, config hash and resolved config
-subtree, environment (lockfile hash), input hashes, output hashes, metrics summary. Every output hash
+subtree, environment (lockfile + hash, Python version, platform, `git_dirty`), input
+hashes, output hashes, metrics summary; failed runs add `error` and `traceback`.
+`index.jsonl` appends are `flock`ed. Every output hash
 appears as an input hash in some later manifest → the lineage graph is implicit and
 walkable from any model back to raw data + config + commit.
 

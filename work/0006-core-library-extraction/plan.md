@@ -26,7 +26,7 @@
 | 5 | Top-level `PipelineConfig` pydantic schema (tracker, tune, seed, download_dir); seed reaches backends or is dropped; `tune.metric` + `tune.direction` replace the hardcoded `mean_corr`/maximize | 0004 B, 0007 A3 (tune half) | **done** 2026-10-20 (seed dropped) |
 | 6 | `evaluate` scores the validation holdout too, side by side with OOF | 0004 F, 0007 D3 | **done** 2026-10-20 |
 | 7 | Hygiene: demo vs real manifests apart, STATUS header, bootstrap twin (deletion = human step) | 0004 G | **done** 2026-10-20 (`manifests/<pipeline>`, ruff exclude); twin deletion awaits human |
-| 7b | Manifest hardening: failed records carry `error` + `traceback`; environment adds `git_dirty`, `python_version`, `platform`, lockfile candidates (no CUDA probe in core); `fcntl.flock` around `index.jsonl` appends | 0007 A1, M5, M4, M3 | todo |
+| 7b | Manifest hardening: failed records carry `error` + `traceback`; environment adds `git_dirty`, `python_version`, `platform`, lockfile candidates (no CUDA probe in core); `fcntl.flock` around `index.jsonl` appends | 0007 A1, M5, M4, M3 | **done** 2026-10-20 |
 
 ## Phase 2 — generic core
 

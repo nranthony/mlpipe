@@ -131,3 +131,13 @@ Log:
   - The pyproject ADR citation flagged by 0004 G was already fixed under ADR-0003.
   - Human ask: delete `mlpipe-claude-init-package/` (25 tracked files).
   - 86 tests green.
+- 2026-10-20: work/0006 step 7b (work/0007 A1, M3, M4, M5). This completes phase 1.
+  - Failed manifests record `error` and `traceback`.
+  - The environment record (computed once per run) adds `lockfile` (the first of uv,
+    poetry, pdm, pixi or requirements found), `python_version`, `platform` and
+    `git_dirty` (tracked files only). It has no CUDA probe, per ADR-0004.
+  - `index.jsonl` appends are `fcntl.flock`ed. The 4-process test guards against
+    regression, but may not tell lock from no-lock, since Linux `O_APPEND` writes are
+    usually atomic already.
+  - Fixed a `lo =names` whitespace slip from step 5.
+  - 89 tests green, ruff clean repo-wide. Orchestration modules 557 lines (still under the ~600 signal).

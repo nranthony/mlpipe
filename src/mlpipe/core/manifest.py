@@ -5,20 +5,30 @@ Losing the tracker must lose zero provenance — these files are the source of t
 
 from __future__ import annotations
 
+import fcntl
 import json
 import subprocess
 import uuid
 from pathlib import Path
 
 
-def git_commit() -> str | None:
+def _git(*args: str) -> str | None:
     try:
-        out = subprocess.run(
-            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
-        )
+        out = subprocess.run(["git", *args], capture_output=True, text=True, check=True)
         return out.stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return None
+
+
+def git_commit() -> str | None:
+    return _git("rev-parse", "HEAD")
+
+
+def git_dirty() -> bool | None:
+    """True if tracked files differ from HEAD: the commit alone does not describe
+    what ran (mlpipe.core is outside signatures, so this matters). None = no git."""
+    out = _git("status", "--porcelain", "--untracked-files=no")
+    return None if out is None else bool(out)
 
 
 class ManifestLog:
@@ -32,8 +42,15 @@ class ManifestLog:
         record["manifest_id"] = uuid.uuid4().hex
         path = self.root / f"{record['step']}_{record['manifest_id']}.json"
         path.write_text(json.dumps(record, indent=2, sort_keys=True))
+        line = json.dumps(record, sort_keys=True) + "\n"
         with self.index.open("a") as f:
-            f.write(json.dumps(record, sort_keys=True) + "\n")
+            # concurrent writers (parallel trials, two agents) must not interleave
+            fcntl.flock(f, fcntl.LOCK_EX)
+            try:
+                f.write(line)
+                f.flush()
+            finally:
+                fcntl.flock(f, fcntl.LOCK_UN)
         return path
 
     def entries(self) -> list[dict]:
