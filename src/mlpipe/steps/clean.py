@@ -43,6 +43,12 @@ class CleanConfig(BaseModel):
         default_factory=BaselineCleanConfig, discriminator="kind"
     )
     era_slice: EraSlice | None = None
+    # The source's era column (v6.0: `date`); renamed to the canonical `era`
+    # here, so nothing downstream knows the source's name.
+    era_column: str = "era"
+    # Features dropped from the chosen set, explicitly (e.g. v6.0's String
+    # `feature_country`, which no numeric backend can take as is).
+    exclude_features: list[str] = []
 
 
 def slice_eras(lf: pl.LazyFrame, cut: EraSlice | None) -> pl.LazyFrame:
@@ -77,17 +83,25 @@ class CleanStep(Step):
     def run(self, ctx):
         step_cfg = CleanConfig.model_validate(ctx.config.get(self.name, {}))
         cfg = step_cfg.cleaner
-        features = sorted(ctx.get("features_meta")["feature_sets"][cfg.feature_set])
+        chosen = ctx.get("features_meta")["feature_sets"][cfg.feature_set]
+        unknown = set(step_cfg.exclude_features) - set(chosen)
+        if unknown:
+            raise ValueError(f"exclude_features not in feature set {cfg.feature_set!r}: {sorted(unknown)}")
+        features = sorted(set(chosen) - set(step_cfg.exclude_features))
         outs = {}
         for in_key, out_key in [
             ("validated_train", "clean_table"),
             ("validated_validation", "clean_validation"),
         ]:
-            lf = slice_eras(ctx.get_lazy(in_key), step_cfg.era_slice)
+            lf = ctx.get_lazy(in_key)
+            if step_cfg.era_column != "era":
+                lf = lf.rename({step_cfg.era_column: "era"})
+            lf = slice_eras(lf, step_cfg.era_slice)
             df = CLEANERS[cfg.kind](lf, cfg, features, cfg.targets).collect(engine="streaming")
             outs[out_key] = ctx.put(df, out_key)
             ctx.log_meta(out_key, {
                 "rows": df.height, "eras": df["era"].n_unique(), "features": len(features),
+                "excluded": step_cfg.exclude_features,
                 "cleaner": cfg.kind, "era_slice": step_cfg.era_slice and step_cfg.era_slice.model_dump(),
             })
         return StepResult(outputs=outs)

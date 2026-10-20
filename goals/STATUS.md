@@ -3,13 +3,14 @@
 **Current state (update in place; the log below is append-only):**
 - Build cycles 0–10: code complete since 2026-08-20.
 - Active work: work/0006 plan ([plan.md](../work/0006-core-library-extraction/plan.md)).
-  Phase 1 (steps 1–7b) is in progress.
-- Real data: **not proven on the current code.** Every Numerai signature is cold
-  (2026-08-24 onward). As of 2026-10-20 the local `store/`, `manifests/` and `mlruns/`
-  are absent, and so is the raw cache `/workspace/raw_data/numerai`. The next real run
-  starts from a fresh download (a human step if numer.ai is outside the egress allowlist).
+  Phase 1 (steps 1–7b) done; phase 2 step 8 done; next is step 9.
+- Data: Numerai **v6.0** (v5.x training files are no longer served). Raw files are in
+  `/workspace/raw_data/numerai/v6.0` (downloaded host-side 2026-10-20).
+- Real data: **smoke-proven only** (2026-10-20): the whole chain on 100 eras, cache-hit
+  rerun, plan `7c4df3df`, tag `smoke`. No full run on v6.0 yet; that is step 13.
 - Promoted: nothing valid. `baselines.yaml` is in the pre-ADR-0006 shape, and the
-  registry it referred to is gone with `mlruns/`.
+  registry it referred to is gone (the old `store/`/`manifests/`/`mlruns/` were lost
+  before 2026-10-20; the current ones are fresh). Smoke runs are never promoted.
 
 Log:
 - 2026-08-20: Bootstrap skeleton delivered to repo root. Cycle 0 attempted; blocked
@@ -141,3 +142,39 @@ Log:
     usually atomic already.
   - Fixed a `lo =names` whitespace slip from step 5.
   - 89 tests green, ruff clean repo-wide. Orchestration modules 557 lines (still under the ~600 signal).
+- 2026-10-20: work/0006 step 8, the real-data smoke run, on **Numerai v6.0**.
+  - **Why v6.0:** v5.2 `train.parquet` is no longer served (only v5.x `live` and
+    `features.json` remain), so the files were downloaded host-side into
+    `/workspace/raw_data/numerai/v6.0`.
+  - **How v6.0 differs:**
+    - the era column is `date`;
+    - the features are 1017 Int8, 22 sparse Float32 factors and the String
+      `feature_country`;
+    - each row carries `numerai_ticker`.
+  - **Changes, all in the Numerai steps' config with core untouched:**
+    - validate has `era_column`, `feature_dtypes` and
+      `max_feature_null_frac_by_dtype` (`Float32: 0.1`; Int8 stays at 0);
+    - clean has `era_column`, renamed to the canonical `era`, and `exclude_features`
+      (`feature_country`, a String, dropped for now; encoding it is model work);
+    - the bundle carries `era_column` for `predict`;
+    - the ingest default is v6.0.
+  - **Run:** `mlpipe run --pipeline numerai --set clean.era_slice.n=100 --set
+    train.model.params.n_estimators=50 --tag smoke`. The first attempt failed at
+    validate on Float32 nulls (0.0714). The failed manifest carried the error and
+    traceback (7b working), which led to the per-dtype bound.
+  - **Second attempt:** ingest→register succeeded in 77 s. Clean: 100 train eras /
+    652,973 rows, and 87 validation eras / 597,251 rows (the last 13 dates have no
+    resolved target), 350 features. Plan `7c4df3df` (4 folds, purge/embargo 4),
+    bundle `484a5c65`.
+  - **Rerun:** all 8 steps cached. `lineage` walks from the bundle to the ingest
+    snapshot, and `predict --bundle` served 7,154 live rows.
+  - **Smoke metrics (plumbing only, not model quality):**
+    - OOF `mean_corr` 0.0242 (sharpe 1.21);
+    - holdout `val_mean_corr` 0.0016 (sharpe 0.11), with 2015–18 training eras
+      against 2024–26 holdout eras and 50 trees.
+  - **Disk:** store 3.6 GB.
+  - **Provenance:** the manifests record `git_dirty: true` at `b571c5a`, accurately:
+    this code was uncommitted when it ran and lands in the next commit, and the step
+    signatures are unaffected.
+  - **Not done:** `predict` doesn't emit `numerai_ticker` (needed for a v6 submission;
+    step 13 makes `predict` domain-free). 92 tests green, ruff clean.

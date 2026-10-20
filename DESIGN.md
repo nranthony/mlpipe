@@ -83,8 +83,8 @@ the pinned bundle. The next iteration cycle builds on the pinned baseline.
 | # | Block | Contract (inputs → outputs) | Notes |
 |---|-------|------------------------------|-------|
 | 1 | Ingest & snapshot | source config → `raw_train`, `raw_validation`, `raw_live`, `features_meta` | numerapi pull into the shared download cache, freeze exact bytes, hash. Record dataset name/version/size in the manifest. |
-| 2 | Validate | raw tables → `validated_*` (zero-copy aliases) + `validation_report` | pandera schemas: columns, dtypes (int8!), null bounds, era monotonicity, row counts vs previous snapshot. Hard gate — fail loud. |
-| 3 | Clean & transform | validated → `clean_table` + `clean_validation` | Stateless only. Same input ⇒ same output. Polars exprs; validation cleaned with the same exprs so downstream skew checks have a target. |
+| 2 | Validate | raw tables → `validated_*` (zero-copy aliases) + `validation_report` | pandera schemas: columns, the configured era column, feature dtypes against an allow-list, per-dtype null bounds, era monotonicity, row counts vs previous snapshot. Hard gate — fail loud. |
+| 3 | Clean & transform | validated → `clean_table` + `clean_validation` | Stateless only. Renames the source's era column to the canonical `era` (v6.0: `date`) and drops `exclude_features`, so nothing downstream knows source names. Same input ⇒ same output. Polars exprs; validation cleaned with the same exprs so downstream skew checks have a target. |
 | 4 | Feature engineering | clean → `feature_table` + `feature_validation` + `fitted_transformer` | Fitted transforms learn from train only. The transformer is a versioned artifact that travels with the model; `feature_validation` is what the skew guard compares against. |
 | 5 | Split / CV plan | feature table + cv config → `fold_plan` | Era-aware, purged, embargoed. The plan is an artifact with its own hash; model comparisons must cite the same plan hash. |
 | 6 | Train & tune | features + fold_plan + model config → `model`, `oof_preds` | Via ModelBackend port. `model` is a `{full, fold_models}` bundle so stored state alone reproduces OOF (5x size, no retraining needed for audit). Optuna via `mlpipe tune`. |
@@ -171,7 +171,12 @@ procedure. Its zones are in TEMPLATE_OWNERSHIP.md. Rollout: work/0006 plan.
 
 ## 8. Known landscape facts (as of Aug 2026, verified)
 
-- Numerai v5.2 data: parquet, int8 formats; pull via numerapi.
+- Numerai data (2026-10-20): **v6.0** is the only version still serving `train.parquet`.
+  v5.0–v5.3 serve only `live.parquet` and `features.json`. In v6.0 the era column is
+  `date` (weekly ISO; 835 train dates, 2003–2018; validation 2019 to the present, incl.
+  `test` rows with null target). Features: 1017 Int8 + 22 Float32 factors (sparse,
+  ≤7.1% null) + 1 String (`feature_country`, in every named set). Rows also carry
+  `numerai_ticker`. Pull via numerapi. (Aug 2026: v5.2, all-int8, `era`.)
 - W&B self-hosting is enterprise-only → not usable under the local-only constraint.
 - Neptune: acquired by OpenAI, public service winding down → off the table.
 - MLflow: open source, Linux Foundation; local SQLite + ./mlruns works fine; its MCP

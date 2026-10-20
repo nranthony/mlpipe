@@ -38,7 +38,7 @@ class IngestStep(Step):
 
     def run(self, ctx):
         cfg = ctx.config.get(self.name, {})
-        version = cfg.get("version", "v5.2")
+        version = cfg.get("version", "v6.0")  # v5.x training files retired (2026-10)
         download_dir = Path(ctx.config.get("download_dir", "/workspace/raw_data/numerai"))
 
         outs = {}

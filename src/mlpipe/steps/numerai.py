@@ -17,9 +17,21 @@ from mlpipe.steps.validate import ValidateStep
 
 DEFAULT_CONFIG = {
     "download_dir": "/workspace/raw_data/numerai",  # shared profile-wide cache
-    "ingest": {"version": "v5.2"},
-    "validate": {"row_tolerance": 0.2, "max_feature_null_frac": 0.0},
-    "clean": {"cleaner": {"kind": "baseline", "feature_set": "medium"}},
+    # v6.0 (2026-10): v5.x training files are no longer served. The era column is
+    # `date`, and `medium` = 350 Int8 + the String `feature_country`.
+    "ingest": {"version": "v6.0"},
+    "validate": {
+        "row_tolerance": 0.2,
+        "max_feature_null_frac": 0.0,  # Int8 (and String): dense, so strict
+        "max_feature_null_frac_by_dtype": {"Float32": 0.1},  # factor features: ≤7.1% seen
+        "era_column": "date",
+        "feature_dtypes": ["Int8", "Float32", "String"],
+    },
+    "clean": {
+        "cleaner": {"kind": "baseline", "feature_set": "medium"},
+        "era_column": "date",
+        "exclude_features": ["feature_country"],  # String; encoding it is model work
+    },
     "features": {"transformer": {"kind": "passthrough"}},
     "cvplan": {"n_folds": 4, "purge_eras": 4, "embargo_eras": 4},
     "train": {

@@ -221,3 +221,85 @@ def test_concurrent_index_appends_never_interleave(tmp_path):
     lines = (tmp_path / "index.jsonl").read_text().splitlines()
     assert len(lines) == 100
     assert all(json.loads(line)["pad"] == "x" * 70_000 for line in lines)
+
+
+# ---------------------------------------------------------------- Numerai v6.0 shape (step 8)
+
+V6_META = {
+    "feature_sets": {
+        "medium": ["feature_a", "feature_country"],
+        "all": ["feature_a", "feature_country", "feature_f"],
+    },
+    "targets": ["target"],
+}
+V6_VALIDATE = {"era_column": "date", "feature_dtypes": ["Int8", "Float32", "String"]}
+V6_CLEAN = {
+    "cleaner": {"kind": "baseline", "feature_set": "medium"},
+    "era_column": "date",
+    "exclude_features": ["feature_country"],
+}
+
+
+def v6_frame() -> pl.DataFrame:
+    return pl.DataFrame({
+        "numerai_ticker": ["A", "B", "A", "B"],
+        "date": ["2019-01-04", "2019-01-04", "2019-01-11", "2019-01-11"],
+        "feature_a": pl.Series([1, 2, 3, 4], dtype=pl.Int8),
+        "feature_country": ["KR", "US", "KR", "US"],
+        "feature_f": pl.Series([0.1, 0.2, 0.3, 0.4], dtype=pl.Float32),
+        "target": pl.Series([0.25, 0.5, None, 1.0], dtype=pl.Float32),
+    })
+
+
+def test_v6_validate_accepts_date_era_and_mixed_feature_dtypes(env):
+    from mlpipe.steps.validate import ValidateStep
+
+    store, tmp = env
+    seeds = [store.save(v6_frame(), k, ext="parquet") for k in ("raw_train", "raw_validation", "raw_live")]
+    seeds.append(store.save(V6_META, "features_meta", ext="json"))
+    pipe = Pipeline([ValidateStep()], store, tmp / "m", {"validate": V6_VALIDATE})
+    (m,) = pipe.run(seeds=seeds)["manifests"]
+    assert m["status"] == "success"
+    # the v5 defaults (era column `era`, Int8 only) reject the same bytes, loudly
+    with pytest.raises(ValueError, match="'era' must be a non-null String"):
+        Pipeline([ValidateStep()], store, tmp / "m2", {}).run(seeds=seeds)
+    with pytest.raises(ValueError, match="features must be one of"):
+        Pipeline([ValidateStep()], store, tmp / "m3", {"validate": {"era_column": "date"}}).run(
+            seeds=seeds
+        )
+
+
+def test_v6_clean_renames_era_and_drops_excluded_features(env):
+    store, tmp = env
+    seeds = [
+        store.save(v6_frame(), "validated_train", ext="parquet"),
+        store.save(v6_frame(), "validated_validation", ext="parquet"),
+        store.save(V6_META, "features_meta", ext="json"),
+    ]
+    result = Pipeline([CleanStep()], store, tmp / "m", {"clean": V6_CLEAN}).run(seeds=seeds)
+    out = store.load(result["artifacts"]["clean_table"].content_hash)
+    assert out.columns == ["era", "feature_a", "target"]  # canonical era; country gone
+    assert out.height == 3  # null-target row dropped
+    bad = {"clean": {**V6_CLEAN, "exclude_features": ["feature_typo"]}}
+    with pytest.raises(ValueError, match="feature_typo"):
+        Pipeline([CleanStep()], store, tmp / "m2", bad).run(seeds=seeds)
+
+
+def test_v6_null_bound_is_per_dtype(env):
+    """Sparse Float32 factors pass under their own bound; an Int8 null still fails."""
+    from mlpipe.steps.validate import ValidateStep
+
+    store, tmp = env
+    sparse = v6_frame().with_columns(pl.Series("feature_f", [None, 0.2, 0.3, 0.4], pl.Float32))
+    cfg = {"validate": {**V6_VALIDATE, "max_feature_null_frac_by_dtype": {"Float32": 0.3}}}
+
+    def run(frame, manifests):
+        seeds = [store.save(frame, k, ext="parquet") for k in ("raw_train", "raw_validation", "raw_live")]
+        seeds.append(store.save(V6_META, "features_meta", ext="json"))
+        return Pipeline([ValidateStep()], store, tmp / manifests, cfg).run(seeds=seeds)
+
+    report = store.load(run(sparse, "m1")["manifests"][0]["outputs"]["validation_report"])
+    assert report["raw_train"]["max_feature_null_frac_by_dtype"]["Float32"] == 0.25
+    holed = sparse.with_columns(pl.Series("feature_a", [None, 2, 3, 4], pl.Int8))
+    with pytest.raises(ValueError, match="worst Int8 feature null fraction 0.2500"):
+        run(holed, "m2")

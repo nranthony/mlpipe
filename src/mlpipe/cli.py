@@ -221,7 +221,7 @@ def predict(
     matrix = transformer.transform(feats.to_numpy())
     model = store.load(content["model_hash"])["full"]
     preds = model.predict(pl.from_numpy(matrix, schema=content["features"]))
-    frame = pl.DataFrame({"era": live["era"], "prediction": preds})
+    frame = pl.DataFrame({"era": live[content.get("era_column", "era")], "prediction": preds})
     frame.write_parquet(out)
     typer.echo(
         f"{content.get('model_name', '?')} (bundle {bundle_hash[:8]}, "

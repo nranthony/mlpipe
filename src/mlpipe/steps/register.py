@@ -42,6 +42,7 @@ class RegisterStep(Step):
             "target": report["target"],
             "metrics": report["metrics"],
             "cleaner": ctx.config.get("clean", {}).get("cleaner", {}),
+            "era_column": ctx.config.get("clean", {}).get("era_column", "era"),  # raw name
             "model_config": ctx.config.get("train", {}).get("model", {}),
         }
         art = ctx.put(bundle, "model_bundle", ext="json")
