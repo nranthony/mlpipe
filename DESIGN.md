@@ -56,7 +56,10 @@ any core edit; core is covered by tests and by the `git_commit` in every manifes
 **Caching** — before running a step, look up its signature in the manifest index. If a
 manifest exists and all its output hashes are present in the store, skip and return the
 cached outputs. This one mechanism provides: SageMaker-style step caching, iterate-on-
-any-block (`run --from clean` re-runs only clean and downstream), and lineage.
+any-block (a plain `run` after a config change re-runs only the changed step and
+downstream), and lineage. `--from X` is an *assertion*: every step upstream of X must
+be a cache hit under the current config, or the run fails. It never serves outputs
+that a different config produced.
 
 **Run manifest** — one JSON file per step execution, append-only, in `manifests/`:
 step name, signature, timestamps, status, git commit, config hash, environment
@@ -125,6 +128,9 @@ protocol. Plotting/metrics hide behind plain functions, not classes.
 - **Read path:** manifests (grep-able JSON), MLflow UI + MLflow MCP server for run
   comparison. Optional: generate plotly HTML comparisons from the tracking API.
 - Config typos must die at pydantic validation, not at hour six of training.
+- **Smoke runs** prove plumbing, not model quality: `--set clean.era_slice.n=100` (plus
+  a small `feature_set`, few folds and few trees), always with `--tag smoke`. A slice
+  changes the plan hash, so a smoke run is never comparable with a full run.
 
 ## 6. Build order (cycles)
 

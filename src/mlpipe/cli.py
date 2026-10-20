@@ -20,7 +20,9 @@ app = typer.Typer(add_completion=False, no_args_is_help=True)
 @app.command()
 def run(
     pipeline: str = typer.Option("demo", help="pipeline module in mlpipe.steps"),
-    from_step: str = typer.Option(None, "--from", help="first step to (re)run"),
+    from_step: str = typer.Option(
+        None, "--from", help="first step to run; upstream must be cached under this config"
+    ),
     to_step: str = typer.Option(None, "--to", help="last step to run"),
     set_: list[str] = typer.Option(None, "--set", help="config override key.path=value"),
     tag: str = typer.Option(None, help="experiment tag recorded in manifests"),
@@ -65,9 +67,10 @@ def tune(
     manifests_dir: Path = typer.Option(Path("manifests")),
     baselines: Path = typer.Option(Path("baselines.yaml")),
 ) -> None:
-    """Optuna study over the model config subtree. Each trial is a full
-    pipeline run from train — the cache makes upstream free. Search space is
-    declared in config (tune.space), never in code."""
+    """Optuna study over the config-declared search space (tune.space). Each
+    trial is a full pipeline run to evaluate: upstream steps whose config the
+    trial leaves alone are cache hits, so a space reaching below train (e.g. a
+    cleaner knob) recomputes honestly instead of being inert."""
     import optuna
 
     module, cfg = _load_module_and_config(pipeline, config)
@@ -91,7 +94,7 @@ def tune(
                 value = trial.suggest_float(key, spec["low"], spec["high"], log=spec.get("log", False))
             overrides.append(f"{key}={value}")
         result = pipe.run(
-            from_step="train", to_step="evaluate", overrides=overrides,
+            to_step="evaluate", overrides=overrides,
             tag=f"{tcfg['study']}-trial{trial.number}",
         )
         evaluated = [m for m in result["manifests"] if m["step"] == "evaluate"][-1]

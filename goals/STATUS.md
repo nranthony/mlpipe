@@ -51,3 +51,13 @@ Log:
   pytest: `.venv-sandbox` was empty again (work/0005 Q4 recurred), and only a stdlib AST
   check ran (0 boundary violations). Human ask: host-side `uv sync --frozen --all-extras`.
   Plan: work/0006/plan.md.
+- 2026-10-20: work/0006 steps 1-3. Venv repopulated host-side; step 1 verified (65
+  green). Step 2: `clean.era_slice` {mode: tail|head|stride, n}, whole eras only (no row
+  sampling, so the plan hash changes honestly); clean meta records eras + slice;
+  `--tag smoke` convention in DESIGN.md §5. Step 3: `--from X` now resolves upstream by
+  signature under the current config and fails if any upstream step is not a cache
+  hit. It no longer serves the latest outputs regardless of config (closes work/0004 C
+  and work/0002 gap 2). `tune` runs trials without `--from`, so a space below train
+  recomputes instead of being inert. CleanConfig now dumps `era_slice: null`, so the
+  clean signature changes (Numerai signatures were already cold). 74 tests green, ruff
+  clean on src/tests. Orchestration modules 520 lines.

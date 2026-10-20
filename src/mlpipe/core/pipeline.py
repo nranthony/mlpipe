@@ -82,19 +82,23 @@ class Pipeline:
         lo = names.index(from_step) if from_step else 0
         hi = names.index(to_step) + 1 if to_step else len(self.steps)
 
-        # Upstream of --from is served from the latest manifests + store.
-        latest = self.log.latest_outputs()
-        for step in self.steps[:lo]:
-            for key in step.outputs:
-                if key not in latest:
-                    raise RuntimeError(f"no cached artifact for upstream {key!r}")
-                h = latest[key]
-                ctx.register(Artifact(key, h, self.store.path_of(h), {}))
-
+        # Upstream of --from is resolved by signature under the CURRENT config and
+        # must be a cache hit: --from asserts "upstream is cached", it never serves
+        # outputs some other config produced (work/0004 C).
+        upstream = [
+            self._run_step(s, ctx, config, tag, from_step=from_step) for s in self.steps[:lo]
+        ]
         written = [self._run_step(s, ctx, config, tag) for s in self.steps[lo:hi]]
-        return {"artifacts": dict(ctx.registry), "manifests": written}
+        return {"artifacts": dict(ctx.registry), "manifests": upstream + written}
 
-    def _run_step(self, step: Step, ctx: RunContext, config: dict, tag: str | None) -> dict:
+    def _run_step(
+        self,
+        step: Step,
+        ctx: RunContext,
+        config: dict,
+        tag: str | None,
+        from_step: str | None = None,
+    ) -> dict:
         ctx.reset_step()
         started = _now()
         input_hashes = ctx.input_hashes(step.inputs)
@@ -123,6 +127,11 @@ class Pipeline:
             }
             self.log.write(record)
             return record
+        if from_step is not None:
+            raise RuntimeError(
+                f"--from {from_step}: upstream step {step.name!r} is not cached for the "
+                "current config; run without --from (cached steps are skipped anyway)"
+            )
 
         self.tracker.start_run(base)
         try:

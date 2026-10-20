@@ -28,10 +28,29 @@ class MinimalCleanConfig(BaseModel):
     targets: list[str] = ["target"]
 
 
+class EraSlice(BaseModel):
+    """Smoke-run row cut (work/0003). Whole eras only: row sampling would keep the
+    plan hash and look comparable to a full run. `tail`/`head` keep n contiguous
+    eras (purge/embargo stay meaningful); `stride` keeps every n-th era, which
+    breaks contiguity, so purge_eras then spans n× more real eras."""
+
+    mode: Literal["tail", "head", "stride"] = "tail"
+    n: int = Field(gt=0)
+
+
 class CleanConfig(BaseModel):
     cleaner: BaselineCleanConfig | MinimalCleanConfig = Field(
         default_factory=BaselineCleanConfig, discriminator="kind"
     )
+    era_slice: EraSlice | None = None
+
+
+def slice_eras(lf: pl.LazyFrame, cut: EraSlice | None) -> pl.LazyFrame:
+    if cut is None:
+        return lf
+    eras = lf.select(pl.col("era").unique(maintain_order=True)).collect()["era"].to_list()
+    keep = {"tail": eras[-cut.n:], "head": eras[: cut.n], "stride": eras[:: cut.n]}[cut.mode]
+    return lf.filter(pl.col("era").is_in(keep))
 
 
 def _baseline(lf: pl.LazyFrame, cfg, features: list[str], targets: list[str]) -> pl.LazyFrame:
@@ -56,15 +75,19 @@ class CleanStep(Step):
     config_model = CleanConfig
 
     def run(self, ctx):
-        cfg = CleanConfig.model_validate(ctx.config.get(self.name, {})).cleaner
+        step_cfg = CleanConfig.model_validate(ctx.config.get(self.name, {}))
+        cfg = step_cfg.cleaner
         features = sorted(ctx.get("features_meta")["feature_sets"][cfg.feature_set])
         outs = {}
         for in_key, out_key in [
             ("validated_train", "clean_table"),
             ("validated_validation", "clean_validation"),
         ]:
-            lf = CLEANERS[cfg.kind](ctx.get_lazy(in_key), cfg, features, cfg.targets)
-            df = lf.collect(engine="streaming")
+            lf = slice_eras(ctx.get_lazy(in_key), step_cfg.era_slice)
+            df = CLEANERS[cfg.kind](lf, cfg, features, cfg.targets).collect(engine="streaming")
             outs[out_key] = ctx.put(df, out_key)
-            ctx.log_meta(out_key, {"rows": df.height, "features": len(features), "cleaner": cfg.kind})
+            ctx.log_meta(out_key, {
+                "rows": df.height, "eras": df["era"].n_unique(), "features": len(features),
+                "cleaner": cfg.kind, "era_slice": step_cfg.era_slice and step_cfg.era_slice.model_dump(),
+            })
         return StepResult(outputs=outs)

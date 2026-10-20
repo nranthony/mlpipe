@@ -16,9 +16,9 @@
 
 | # | Step | Source | State |
 |---|---|---|---|
-| 1 | ADR-0004/0005/0006; move `MlflowTracker` out of core; core boundary test | 0004 D | **done 2026-10-19, tests not run** (venv empty, see blockers) |
-| 2 | `era_slice` smoke runs (clean step) + `--tag smoke` convention | 0003 | todo |
-| 3 | `--from` resolves upstream by current-config signatures, not "latest ever" | 0004 C, 0002 gap 2 | todo |
+| 1 | ADR-0004/0005/0006; move `MlflowTracker` out of core; core boundary test | 0004 D | **done** 2026-10-19 (`3eded0f`); pytest green 2026-10-20 |
+| 2 | `era_slice` smoke runs (clean step) + `--tag smoke` convention | 0003 | **done** 2026-10-20 |
+| 3 | `--from` resolves upstream by current-config signatures, not "latest ever"; `tune` no longer uses `--from` | 0004 C, 0002 gap 2 | **done** 2026-10-20 |
 | 4 | `mlpipe promote <bundle-hash>`; `register` stops auto-registering; `tune` stops writing baselines | ADR-0006, 0004 A, 0002 gap 3 | todo |
 | 5 | Top-level `PipelineConfig` pydantic schema (tracker, tune, seed, download_dir); seed reaches backends or is dropped | 0004 B | todo |
 | 6 | `evaluate` scores the validation holdout too | 0004 F | todo |
@@ -44,6 +44,8 @@
 
 ## Blockers / human steps
 
+- *Resolved 2026-10-20:* the venv was repopulated host-side, and 65 tests passed at
+  step 1.
 - **`.venv-sandbox` is empty again** (2026-10-19). `uv run` recreates a bare Python
   3.13 venv with no pytest, and an offline `uv sync --frozen --all-extras` was denied
   in-sandbox. This is the recurrence work/0005 Q4 asked about. **Ask:** run
