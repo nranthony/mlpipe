@@ -155,3 +155,20 @@ def test_shipped_default_configs_validate(name):
 
     module = importlib.import_module(f"mlpipe.steps.{name}")
     validate_config(module.DEFAULT_CONFIG, [s.name for s in module.build_steps()])
+
+
+# ---------------------------------------------------------------- hygiene (step 7)
+
+
+def test_default_manifest_log_is_per_pipeline(tmp_path, monkeypatch):
+    """work/0004 G: demo runs must not land in the real pipeline's history."""
+    from typer.testing import CliRunner
+
+    from mlpipe.cli import app
+
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(app, ["run", "--pipeline", "demo"])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "manifests" / "demo" / "index.jsonl").exists()
+    assert not (tmp_path / "manifests" / "index.jsonl").exists()
+    assert (tmp_path / "store").is_dir()  # the store stays shared

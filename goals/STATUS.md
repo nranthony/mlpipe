@@ -1,5 +1,16 @@
 # Status
-ALL CYCLES 0-10 COMPLETE (2026-08-20)
+
+**Current state (update in place; the log below is append-only):**
+- Build cycles 0–10: code complete since 2026-08-20.
+- Active work: work/0006 plan ([plan.md](../work/0006-core-library-extraction/plan.md)).
+  Phase 1 (steps 1–7b) is in progress.
+- Real data: **not proven on the current code.** Every Numerai signature is cold
+  (2026-08-24 onward). As of 2026-10-20 the local `store/`, `manifests/` and `mlruns/`
+  are absent, and so is the raw cache `/workspace/raw_data/numerai`. The next real run
+  starts from a fresh download (a human step if numer.ai is outside the egress allowlist).
+- Promoted: nothing valid. `baselines.yaml` is in the pre-ADR-0006 shape, and the
+  registry it referred to is gone with `mlruns/`.
+
 Log:
 - 2026-08-20: Bootstrap skeleton delivered to repo root. Cycle 0 attempted; blocked
   at environment provisioning (registries closed in sandbox, polars absent from the
@@ -107,3 +118,16 @@ Log:
   and promote pins both sets of metrics through the bundle. The evaluate signature
   changes because its inputs changed; Numerai was already cold. Previously reported
   numbers, such as 0.02793 on plan 48de731b, were OOF only. 85 tests green, ruff clean.
+- 2026-10-20: work/0006 step 7 (closes work/0004 G except the twin's deletion).
+  - The CLI's default manifest log is now `manifests/<pipeline>`, so demo runs no
+    longer land in the Numerai history. The store stays shared.
+  - `lineage` gains `--pipeline`.
+  - ruff excludes the bootstrap twin, so `ruff check .` is clean repo-wide.
+  - The pyproject description is generic.
+  - The STATUS header now carries the current state.
+  - Found: `store/`, `manifests/`, `mlruns/` and `/workspace/raw_data/numerai` are
+    absent from this checkout (they are gitignored, so not recoverable from git), and
+    step 8 needs a fresh download.
+  - The pyproject ADR citation flagged by 0004 G was already fixed under ADR-0003.
+  - Human ask: delete `mlpipe-claude-init-package/` (25 tracked files).
+  - 86 tests green.

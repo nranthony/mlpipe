@@ -17,6 +17,14 @@ from mlpipe.core.store import LocalCasStore
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 
+# One manifest log per pipeline (work/0004 G): a demo run must not land in the
+# real pipeline's history. The store stays shared — content addressing dedupes it.
+MANIFESTS = typer.Option(None, help="manifest log root (default: manifests/<pipeline>)")
+
+
+def _log_dir(pipeline: str, manifests_dir: Path | None) -> Path:
+    return manifests_dir or Path("manifests") / pipeline
+
 
 @app.command()
 def run(
@@ -29,10 +37,11 @@ def run(
     tag: str = typer.Option(None, help="experiment tag recorded in manifests"),
     config: Path = typer.Option(None, help="YAML config file (else module default)"),
     store_dir: Path = typer.Option(Path("store"), help="artifact store root"),
-    manifests_dir: Path = typer.Option(Path("manifests"), help="manifest log root"),
+    manifests_dir: Path = MANIFESTS,
 ) -> None:
     steps, cfg, top = _load(pipeline, config)
-    pipe = Pipeline(steps, LocalCasStore(store_dir), manifests_dir, cfg, _make_tracker(top))
+    log_dir = _log_dir(pipeline, manifests_dir)
+    pipe = Pipeline(steps, LocalCasStore(store_dir), log_dir, cfg, _make_tracker(top))
     result = pipe.run(from_step, to_step, overrides=set_, tag=tag)
     for m in result["manifests"]:
         typer.echo(f"{m['step']:<20} {m['status']:<8} sig={m['signature'][:8]} "
@@ -62,7 +71,7 @@ def tune(
     set_: list[str] = typer.Option(None, "--set", help="fixed overrides applied to every trial"),
     config: Path = typer.Option(None),
     store_dir: Path = typer.Option(Path("store")),
-    manifests_dir: Path = typer.Option(Path("manifests")),
+    manifests_dir: Path = MANIFESTS,
 ) -> None:
     """Optuna study over the config-declared search space (tune.space). Each
     trial is a full pipeline run to evaluate: upstream steps whose config the
@@ -74,8 +83,9 @@ def tune(
     tcfg = top.tune
     if tcfg is None:
         raise typer.BadParameter(f"pipeline {pipeline!r} config has no `tune` section")
-    pipe = Pipeline(steps, LocalCasStore(store_dir), manifests_dir, cfg, _make_tracker(top))
-    study = optuna.create_study(
+    log_dir = _log_dir(pipeline, manifests_dir)
+    pipe = Pipeline(steps, LocalCasStore(store_dir), log_dir, cfg, _make_tracker(top))
+    study =optuna.create_study(
         study_name=tcfg.study,
         storage=tcfg.storage,
         direction=tcfg.direction,
@@ -126,7 +136,7 @@ def promote(
     pipeline: str = typer.Option("numerai"),
     config: Path = typer.Option(None),
     store_dir: Path = typer.Option(Path("store")),
-    manifests_dir: Path = typer.Option(Path("manifests")),
+    manifests_dir: Path = MANIFESTS,
     baselines: Path = typer.Option(Path("baselines.yaml")),
 ) -> None:
     """The only way to promote (ADR-0006). Pins the bundle in baselines.yaml with
@@ -137,8 +147,8 @@ def promote(
     from mlpipe.core.interfaces import Artifact
     from mlpipe.core.manifest import ManifestLog, git_commit
 
-    log, store = ManifestLog(manifests_dir), LocalCasStore(store_dir)
-    full = _resolve_bundle(log, bundle)
+    log, store = ManifestLog(_log_dir(pipeline, manifests_dir)), LocalCasStore(store_dir)
+    full =_resolve_bundle(log, bundle)
     if not store.exists(full):
         raise typer.BadParameter(f"bundle {full[:12]} is not in the store")
     chain = log.lineage(full)
@@ -179,7 +189,7 @@ def predict(
     bundle: str = typer.Option(None, help="model_bundle hash/prefix (default: baselines.yaml)"),
     pipeline: str = typer.Option("numerai"),
     store_dir: Path = typer.Option(Path("store")),
-    manifests_dir: Path = typer.Option(Path("manifests")),
+    manifests_dir: Path = MANIFESTS,
     baselines: Path = typer.Option(Path("baselines.yaml")),
     out: Path = typer.Option(Path("predictions.parquet")),
 ) -> None:
@@ -189,7 +199,7 @@ def predict(
 
     from mlpipe.core.manifest import ManifestLog
 
-    log, store = ManifestLog(manifests_dir), LocalCasStore(store_dir)
+    log, store = ManifestLog(_log_dir(pipeline, manifests_dir)), LocalCasStore(store_dir)
     if bundle:
         bundle_hash = _resolve_bundle(log, bundle)
     else:
@@ -222,11 +232,12 @@ def predict(
 @app.command()
 def lineage(
     content_hash: str,
-    manifests_dir: Path = typer.Option(Path("manifests")),
+    pipeline: str = typer.Option("numerai"),
+    manifests_dir: Path = MANIFESTS,
 ) -> None:
     from mlpipe.core.manifest import ManifestLog
 
-    for m in ManifestLog(manifests_dir).lineage(content_hash):
+    for m in ManifestLog(_log_dir(pipeline, manifests_dir)).lineage(content_hash):
         typer.echo(f"{m['step']:<20} sig={m['signature'][:8]} "
                    f"commit={(m['git_commit'] or '?')[:8]} inputs={list(m['inputs'])}")
 
