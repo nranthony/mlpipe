@@ -73,3 +73,16 @@ Log:
   521 lines. NOTE: the committed `baselines.yaml` (tune trial 2, 2026-08-20) is the
   pre-ADR-0006 shape with no bundle hash, so `predict` refuses it until a real bundle is
   promoted. Left as-is, as the historical record (repo-owned).
+- 2026-10-20: work/0007 (an independent review by another agent) was cross-checked
+  against the code and folded into the work/0006 plan. 12 of its 14 findings hold.
+  Two needed correcting: M1's fix would have pulled `mlpipe.core` into signatures,
+  and D2's FoldPlan sketch puts a non-default field after a defaulted one. D1 (CV
+  leakage) holds only in part: today's fits use features only, so no target leaks.
+  Where the findings land:
+  - new step 7b, manifest hardening: A1, M3, M4, M5;
+  - M1, the host-package signature closure, ships with step 11 (latent until then);
+  - tune metric/direction, step 5;
+  - domain-free `predict`/`promote`, step 13;
+  - classification metrics, step 12;
+  - new step 16, `gc --dry-run`.
+  No code changed.
