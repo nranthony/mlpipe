@@ -86,7 +86,7 @@ the pinned bundle. The next iteration cycle builds on the pinned baseline.
 | 4 | Feature engineering | clean → `feature_table` + `feature_validation` + `fitted_transformer` | Fitted transforms learn from train only. The transformer is a versioned artifact that travels with the model; `feature_validation` is what the skew guard compares against. |
 | 5 | Split / CV plan | feature table + cv config → `fold_plan` | Era-aware, purged, embargoed. The plan is an artifact with its own hash; model comparisons must cite the same plan hash. |
 | 6 | Train & tune | features + fold_plan + model config → `model`, `oof_preds` | Via ModelBackend port. `model` is a `{full, fold_models}` bundle so stored state alone reproduces OOF (5x size, no retraining needed for audit). Optuna via `mlpipe tune`. |
-| 7 | Evaluate | model + oof_preds + fold_plan → `eval_report` + `eval_chart` (metrics JSON + standalone plotly HTML) | Era-wise corr, sharpe, drawdown, feature exposure. Log metrics to MLflow. |
+| 7 | Evaluate | model + oof_preds + fold_plan + feature_validation → `eval_report` + `eval_chart` (metrics JSON + standalone plotly HTML) | Era-wise corr, sharpe, drawdown, feature exposure — for OOF (`mean_corr`, …) and for the full model on the validation holdout (`val_mean_corr`, …), side by side. Eras with unresolved targets are skipped. Log metrics to MLflow. |
 | 8 | Register & package | model + transformer + eval → `model_bundle` | The bundle holds model + fitted transformer + feature list + cleaner recipe + plan hash. Registry versions are created only by `mlpipe promote` (ADR-0006). |
 
 The stateless/stateful boundary between blocks 3 and 4 is deliberate: block 3 caches on

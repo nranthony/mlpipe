@@ -42,19 +42,35 @@ def test_cycle7_metric_functions():
     assert summarize(era_scores(perfect))["mean_corr"] > 0.95
 
 
+class ProbeModel:
+    """Stands in for a fitted backend: predicts the probe feature itself."""
+
+    def predict(self, X: pl.DataFrame) -> np.ndarray:
+        return X["feature_probe"].to_numpy().astype(np.float32)
+
+
+def feature_frame(df: pl.DataFrame) -> pl.DataFrame:
+    return df.select("era", "target").with_columns(
+        (pl.col("target").rank() % 127).cast(pl.Int8).alias("feature_probe")
+    )
+
+
 @pytest.fixture()
 def env(tmp_path):
     store = LocalCasStore(tmp_path / "store")
     oof = oof_frame()
-    features = oof.select("era", "target").with_columns(
-        pl.col("target").rank().cast(pl.Int8).alias("feature_probe")
-    )
     plan = build_plan(oof["era"], CVConfig(n_folds=2, purge_eras=0, embargo_eras=0))
+    # holdout: later eras, and one era whose targets are not yet resolved (null)
+    holdout = feature_frame(oof).with_columns(pl.col("era").str.replace("e", "v"))
+    holdout = holdout.with_columns(
+        pl.when(pl.col("era") == "v005").then(None).otherwise(pl.col("target")).alias("target")
+    )
     seeds = [
-        store.save({"full": "stub"}, "model", ext="joblib"),
+        store.save({"full": ProbeModel(), "fold_models": []}, "model", ext="joblib"),
         store.save(oof, "oof_preds", ext="parquet"),
         store.save(plan, "fold_plan", ext="joblib"),
-        store.save(features, "feature_table", ext="parquet"),
+        store.save(feature_frame(oof), "feature_table", ext="parquet"),
+        store.save(holdout, "feature_validation", ext="parquet"),
     ]
     return store, tmp_path, seeds, plan
 
@@ -69,6 +85,21 @@ def test_cycle7_evaluate_step_report_and_chart(env):
     html = store.load(result["artifacts"]["eval_chart"].content_hash)
     assert html.startswith("<!DOCTYPE html") or "<html" in html[:200]
     assert "plotly" in html  # standalone: plotly.js embedded, renders offline
+
+
+def test_work0006_evaluate_scores_holdout_beside_oof(env):
+    """work/0004 F: the holdout is scored with the full model, next to OOF."""
+    store, tmp, seeds, _ = env
+    result = Pipeline([EvaluateStep()], store, tmp / "m", {}).run(seeds=seeds)
+    (m,) = result["manifests"]
+    assert {"val_mean_corr", "val_sharpe", "val_n_eras", "val_feature_exposure"} <= set(
+        m["metrics"]
+    )
+    assert m["metrics"]["val_n_eras"] == 5  # the unresolved era is skipped, not scored
+    assert m["metrics"]["val_mean_corr"] > 0.9  # probe model predicts its own feature
+    assert m["metrics"]["mean_corr"] != m["metrics"]["val_mean_corr"]  # distinct sources
+    report = store.load(result["artifacts"]["eval_report"].content_hash)
+    assert set(report["val_era_scores"]) == {f"v{i:03d}" for i in range(5)}
 
 
 def test_cycle7_mlflow_two_runs_comparable_and_disposable(env, tmp_path):

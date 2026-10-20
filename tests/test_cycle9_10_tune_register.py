@@ -109,7 +109,7 @@ def test_adr0006_promote_pins_baseline_and_moves_alias(env):
     full = bundle_hash_of(tmp)
     pinned = promote(tmp, dirs, full[:10])  # unique prefix resolves
     assert pinned["bundle_hash"] == full and pinned["alias"] == "champion"
-    assert pinned["plan_hash"] and "mean_corr" in pinned["metrics"]
+    assert pinned["plan_hash"] and {"mean_corr", "val_mean_corr"} <= set(pinned["metrics"])
     assert pinned["steps"]["train"]["config"]["model"]["params"]["n_estimators"] == 5
     assert set(pinned["steps"]) >= {"ingest", "clean", "cvplan", "train", "register"}
 

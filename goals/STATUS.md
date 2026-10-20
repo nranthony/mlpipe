@@ -99,3 +99,11 @@ Log:
   `tune.metric: mean_corr`. Numerai step signatures are unchanged by this. The demo
   step signatures change, because `demo.py` was edited. 84 tests green,
   ruff clean. Orchestration modules 520 lines; config.py adds 65, outside that set.
+- 2026-10-20: work/0006 step 6 (closes work/0004 F). `evaluate` now takes
+  `feature_validation` and scores the full-data model on the holdout. The OOF and
+  holdout scores sit side by side: `mean_corr`, `sharpe` and so on stay OOF, and the
+  holdout gets `val_*` names. Eras whose targets are unresolved (null) are skipped,
+  not scored as zero. The report gains `val_era_scores`, the chart shows both series,
+  and promote pins both sets of metrics through the bundle. The evaluate signature
+  changes because its inputs changed; Numerai was already cold. Previously reported
+  numbers, such as 0.02793 on plan 48de731b, were OOF only. 85 tests green, ruff clean.
