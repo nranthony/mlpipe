@@ -19,7 +19,10 @@ class NoopTracker:
     def log_metrics(self, metrics: dict[str, float], step: int | None = None) -> None:
         pass
 
-    def register_model(self, artifact: Artifact, name: str) -> None:
+    def register_model(self, artifact: Artifact, name: str) -> str | None:
+        return None
+
+    def set_alias(self, name: str, alias: str, version: str) -> None:
         pass
 
     def end_run(self, status: str) -> None:
@@ -93,6 +96,3 @@ class RunContext(interfaces.RunContext):
     def log_metric(self, name: str, value: float) -> None:
         self.step_metrics[name] = float(value)
         self._tracker.log_metrics({name: float(value)})
-
-    def register_model(self, artifact: Artifact, name: str) -> None:
-        self._tracker.register_model(artifact, name)

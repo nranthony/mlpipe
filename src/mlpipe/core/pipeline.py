@@ -17,7 +17,7 @@ import yaml
 from mlpipe.core.context import NoopTracker, RunContext
 from mlpipe.core.interfaces import Artifact, Step
 from mlpipe.core.manifest import ManifestLog, git_commit
-from mlpipe.core.signature import config_hash, sha256_bytes
+from mlpipe.core.signature import config_hash, config_subtree, sha256_bytes
 
 
 def apply_overrides(config: dict, overrides: list[str] | None) -> dict:
@@ -108,6 +108,7 @@ class Pipeline:
             "signature": sig,
             "git_commit": git_commit(),
             "config_hash": config_hash(config, step.name),
+            "config": config_subtree(config, step.name),  # what promote pins (ADR-0006)
             "environment": environment_info(config),
             "inputs": input_hashes,
             "tag": tag,

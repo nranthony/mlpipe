@@ -19,7 +19,7 @@
 | 1 | ADR-0004/0005/0006; move `MlflowTracker` out of core; core boundary test | 0004 D | **done** 2026-10-19 (`3eded0f`); pytest green 2026-10-20 |
 | 2 | `era_slice` smoke runs (clean step) + `--tag smoke` convention | 0003 | **done** 2026-10-20 |
 | 3 | `--from` resolves upstream by current-config signatures, not "latest ever"; `tune` no longer uses `--from` | 0004 C, 0002 gap 2 | **done** 2026-10-20 |
-| 4 | `mlpipe promote <bundle-hash>`; `register` stops auto-registering; `tune` stops writing baselines | ADR-0006, 0004 A, 0002 gap 3 | todo |
+| 4 | `mlpipe promote <bundle-hash>`; `register` stops auto-registering; `tune` stops writing baselines | ADR-0006, 0004 A, 0002 gap 3 | **done** 2026-10-20 |
 | 5 | Top-level `PipelineConfig` pydantic schema (tracker, tune, seed, download_dir); seed reaches backends or is dropped | 0004 B | todo |
 | 6 | `evaluate` scores the validation holdout too | 0004 F | todo |
 | 7 | Hygiene: demo vs real manifests apart, STATUS header, bootstrap twin (deletion = human step) | 0004 G | todo |

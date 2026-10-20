@@ -1,6 +1,7 @@
 # ADR-0006: Promotion is an explicit `mlpipe promote` verb
 
-- Status: Accepted (implementation pending — work/0006 plan, step 4)
+- Status: Accepted. Implemented 2026-10-20 (work/0006 step 4; see "Implementation
+  notes")
 - Date: 2026-10-19
 - Deciders: nanthony + Claude (work/0004 finding A, work/0002 gap 3)
 
@@ -39,6 +40,23 @@ with anything.
 - `baselines.yaml` becomes something the pipeline actually reads. The comparison
   rule in AGENTS.md ("cite the fold-plan hash") can be applied to the baseline.
 - There is one more CLI verb, which counts toward the CLI, not the core.
+
+## Implementation notes (2026-10-20)
+
+- "Full resolved config" means the config each lineage step *actually ran with*.
+  Every manifest now records its step's resolved config subtree (`config`), the same
+  subtree that goes into the signature. `promote` gathers these along the bundle's
+  lineage into `baselines.yaml` `steps:` and records each step's config hash,
+  signature and commit. Manifests written before this change have no `config` field,
+  so those steps record `null`.
+- The bundle names itself: `register.model_name` is now part of the bundle content.
+- `register_model` is idempotent per bundle hash: re-promoting reuses the version.
+  The Tracker port gains `set_alias`, and `RunContext.register_model` is removed
+  because no step calls it now.
+- `predict` loads the bundle from `baselines.yaml` by default, or from `--bundle`.
+  It no longer reads MLflow at all, so serving survives losing `mlruns/`.
+- A promote leaves a manifest with `status: "promoted"`, which cache lookups and
+  lineage ignore.
 
 ## Alternatives considered
 

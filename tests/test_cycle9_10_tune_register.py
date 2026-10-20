@@ -77,28 +77,68 @@ def env(tmp_path_factory):
     return tmp, cfg_path, dirs
 
 
-def test_cycle10_register_creates_loadable_version(env):
-    tmp, _, _ = env
+def bundle_hash_of(tmp) -> str:
     log = ManifestLog(tmp / "manifests")
-    reg = [m for m in log.entries() if m["step"] == "register"][-1]
-    bundle_hash = reg["outputs"]["model_bundle"]
-    bundle = LocalCasStore(tmp / "store").load(bundle_hash)
+    return [m for m in log.entries() if m["step"] == "register"][-1]["outputs"]["model_bundle"]
+
+
+def promote(tmp, dirs, bundle):
+    result = runner.invoke(
+        app, ["promote", bundle, *dirs, "--baselines", str(tmp / "baselines.yaml")]
+    )
+    assert result.exit_code == 0, result.output
+    return yaml.safe_load((tmp / "baselines.yaml").read_text())["promoted"]
+
+
+def test_cycle10_register_builds_bundle_without_registering(env):
+    tmp, _, _ = env
+    bundle = LocalCasStore(tmp / "store").load(bundle_hash_of(tmp))
     assert bundle["features"] == ["feature_fa", "feature_fb"]
-    assert bundle["plan_hash"]
+    assert bundle["plan_hash"] and bundle["model_name"] == "toy-model"
 
     import mlflow
 
     mlflow.set_tracking_uri(f"sqlite:///{tmp}/mlflow.db")
-    versions = mlflow.MlflowClient().search_model_versions("name='toy-model'")
-    assert versions and versions[0].tags["content_hash"] == bundle_hash
+    names = [m.name for m in mlflow.MlflowClient().search_registered_models()]
+    assert "toy-model" not in names  # ADR-0006: runs never register on their own
+
+
+def test_adr0006_promote_pins_baseline_and_moves_alias(env):
+    tmp, _, dirs = env
+    full = bundle_hash_of(tmp)
+    pinned = promote(tmp, dirs, full[:10])  # unique prefix resolves
+    assert pinned["bundle_hash"] == full and pinned["alias"] == "champion"
+    assert pinned["plan_hash"] and "mean_corr" in pinned["metrics"]
+    assert pinned["steps"]["train"]["config"]["model"]["params"]["n_estimators"] == 5
+    assert set(pinned["steps"]) >= {"ingest", "clean", "cvplan", "train", "register"}
+
+    import mlflow
+
+    mlflow.set_tracking_uri(f"sqlite:///{tmp}/mlflow.db")
+    client = mlflow.MlflowClient()
+    champion = client.get_model_version_by_alias("toy-model", "champion")
+    assert champion.tags["content_hash"] == full
+    assert promote(tmp, dirs, full)["registry_version"] == champion.version  # no duplicate
+    assert len(client.search_model_versions("name='toy-model'")) == 1
+    log = ManifestLog(tmp / "manifests")
+    assert [m for m in log.entries() if m["step"] == "promote"][-1]["inputs"] == {
+        "model_bundle": full
+    }
+
+
+def test_adr0006_promote_rejects_unknown_bundle(env):
+    _, _, dirs = env
+    result = runner.invoke(app, ["promote", "ffffffff", *dirs])
+    assert result.exit_code != 0
 
 
 def test_cycle10_fresh_process_predicts_from_raw_live(env):
     tmp, _, dirs = env
+    promote(tmp, dirs, bundle_hash_of(tmp))
     out = tmp / "preds.parquet"
     proc = subprocess.run(
-        [sys.executable, "-m", "mlpipe.cli", "predict", "--name", "toy-model", *dirs,
-         "--out", str(out)],
+        [sys.executable, "-m", "mlpipe.cli", "predict", *dirs[2:],
+         "--baselines", str(tmp / "baselines.yaml"), "--out", str(out)],
         capture_output=True, text=True, cwd="/workspace/mlpipe", check=False,
     )
     assert proc.returncode == 0, proc.stderr
@@ -117,24 +157,21 @@ def test_cycle10_lineage_from_registered_bundle_reaches_raw_snapshot(env):
     assert "raw_train" in ingest["outputs"]  # raw snapshot hash reachable
 
 
-def test_cycle9_tune_runs_resume_and_promote(env):
+def test_cycle9_tune_runs_resume_and_never_promotes(env):
     tmp, _, dirs = env
-    baselines = tmp / "baselines.yaml"
+    before = (tmp / "baselines.yaml").read_text() if (tmp / "baselines.yaml").exists() else None
     for _ in range(2):  # second invocation resumes the same study
-        result = runner.invoke(
-            app, ["tune", "--pipeline", "numerai", "--n-trials", "2", *dirs,
-                  "--baselines", str(baselines)],
-        )
+        result = runner.invoke(app, ["tune", "--pipeline", "numerai", "--n-trials", "2", *dirs])
         assert result.exit_code == 0, result.output
+    assert "train.model.params.num_leaves=" in result.output  # names the candidate
 
     import optuna
 
     study = optuna.load_study(study_name="toy-study", storage=f"sqlite:///{tmp}/optuna.db")
     assert len(study.trials) == 4  # interrupted/re-invoked study resumed, not restarted
 
-    promoted = yaml.safe_load(baselines.read_text())["promoted"]
-    assert promoted["study"] == "toy-study"
-    assert "train.model.params.num_leaves" in promoted["params"]
+    after = (tmp / "baselines.yaml").read_text() if (tmp / "baselines.yaml").exists() else None
+    assert after == before  # ADR-0006: tune does not write baselines
 
     import mlflow
 

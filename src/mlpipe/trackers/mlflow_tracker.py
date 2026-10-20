@@ -38,17 +38,26 @@ class MlflowTracker:
         if self._mlflow.active_run() is not None:
             self._mlflow.log_metrics(metrics, step=step)
 
-    def register_model(self, artifact: Artifact, name: str) -> None:
+    def register_model(self, artifact: Artifact, name: str) -> str:
+        """Version for this bundle hash; reused if already registered (promote is
+        re-runnable without minting duplicate versions)."""
         client = self._mlflow.MlflowClient()
         if not any(m.name == name for m in client.search_registered_models()):
             client.create_registered_model(name)
-        client.create_model_version(
+        for v in client.search_model_versions(f"name='{name}'"):
+            if v.tags.get("content_hash") == artifact.content_hash:
+                return v.version
+        version = client.create_model_version(
             name=name,
             source=str(artifact.path),
             tags={"content_hash": artifact.content_hash, **{
                 k: str(v)[:250] for k, v in artifact.meta.items()
             }},
         )
+        return version.version
+
+    def set_alias(self, name: str, alias: str, version: str) -> None:
+        self._mlflow.MlflowClient().set_registered_model_alias(name, alias, version)
 
     def end_run(self, status: str) -> None:
         if self._mlflow.active_run() is not None:

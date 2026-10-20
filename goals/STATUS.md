@@ -61,3 +61,15 @@ Log:
   recomputes instead of being inert. CleanConfig now dumps `era_slice: null`, so the
   clean signature changes (Numerai signatures were already cold). 74 tests green, ruff
   clean on src/tests. Orchestration modules 520 lines.
+- 2026-10-20: work/0006 step 4: `mlpipe promote <bundle|prefix>` (ADR-0006). Writes
+  `baselines.yaml` with bundle/plan hashes, metrics, and per-step config, config hash,
+  signature and commit gathered along the bundle's lineage (manifests now record the
+  step's resolved `config` subtree). Registers the bundle idempotently and moves
+  `@champion` when a tracker is configured. Writes a `status: promoted` manifest.
+  `register` no longer registers; the bundle carries `model_name`. `tune` prints the
+  best trial and the command to reproduce it, and never writes baselines. `predict`
+  serves from `baselines.yaml` or `--bundle`, without MLflow. Tracker port: `+set_alias`;
+  `RunContext.register_model` removed. 76 tests green, ruff clean. Orchestration modules
+  521 lines. NOTE: the committed `baselines.yaml` (tune trial 2, 2026-08-20) is the
+  pre-ADR-0006 shape with no bundle hash, so `predict` refuses it until a real bundle is
+  promoted. Left as-is, as the historical record (repo-owned).

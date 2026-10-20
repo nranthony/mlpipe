@@ -68,9 +68,9 @@ appears as an input hash in some later manifest → the lineage graph is implici
 walkable from any model back to raw data + config + commit.
 
 **Promotion** — accepting a run, only via `mlpipe promote <bundle-hash>` (ADR-0006):
-moves the MLflow `@champion` alias and writes `baselines.yaml` with the full resolved
-config, config/plan/bundle hashes, metrics and commit. The next iteration cycle builds
-on the pinned baseline. *(Implementation pending — work/0006 step 4.)*
+moves the MLflow `@champion` alias and writes `baselines.yaml` with the config each
+lineage step ran with, config/plan/bundle hashes, metrics and commit. `predict` serves
+the pinned bundle. The next iteration cycle builds on the pinned baseline.
 
 ## 2. Pipeline blocks (each = one Claude Code cycle)
 
@@ -83,7 +83,7 @@ on the pinned baseline. *(Implementation pending — work/0006 step 4.)*
 | 5 | Split / CV plan | feature table + cv config → `fold_plan` | Era-aware, purged, embargoed. The plan is an artifact with its own hash; model comparisons must cite the same plan hash. |
 | 6 | Train & tune | features + fold_plan + model config → `model`, `oof_preds` | Via ModelBackend port. `model` is a `{full, fold_models}` bundle so stored state alone reproduces OOF (5x size, no retraining needed for audit). Optuna via `mlpipe tune`. |
 | 7 | Evaluate | model + oof_preds + fold_plan → `eval_report` + `eval_chart` (metrics JSON + standalone plotly HTML) | Era-wise corr, sharpe, drawdown, feature exposure. Log metrics to MLflow. |
-| 8 | Register & package | model + transformer + eval → `model_bundle` + registered model version | MLflow registry points at the store bundle: model + fitted transformer + feature list + cleaner recipe + plan hash. |
+| 8 | Register & package | model + transformer + eval → `model_bundle` | The bundle holds model + fitted transformer + feature list + cleaner recipe + plan hash. Registry versions are created only by `mlpipe promote` (ADR-0006). |
 
 The stateless/stateful boundary between blocks 3 and 4 is deliberate: block 3 caches on
 content alone; block 4 produces fitted state that must be versioned with the model.

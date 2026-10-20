@@ -2,7 +2,8 @@
 
 The registered unit is a BUNDLE: model + fitted transformer + feature list +
 cleaner recipe + plan hash — everything serving needs, nothing it doesn't.
-The bundle is a store artifact; MLflow registry is a view pointing at it.
+The bundle is a store artifact. Registering it in MLflow happens only on
+`mlpipe promote` (ADR-0006), never on every run.
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ class RegisterStep(Step):
         report = ctx.get("eval_report")
 
         bundle = {
+            "model_name": cfg.model_name,
             "model_hash": hashes["model"],
             "transformer_hash": hashes["fitted_transformer"],
             "features": features,
@@ -43,7 +45,5 @@ class RegisterStep(Step):
             "model_config": ctx.config.get("train", {}).get("model", {}),
         }
         art = ctx.put(bundle, "model_bundle", ext="json")
-        art.meta.update({"plan_hash": report["plan_hash"], "model_name": cfg.model_name})
-        ctx.register_model(art, cfg.model_name)
-        ctx.log_meta("registered", {"name": cfg.model_name, "bundle_hash": art.content_hash})
+        ctx.log_meta("bundle", {"name": cfg.model_name, "plan_hash": report["plan_hash"]})
         return StepResult(outputs={"model_bundle": art})

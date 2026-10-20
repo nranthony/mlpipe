@@ -48,7 +48,7 @@ current system. Work proceeds in cycles defined by `goals/cycleN_*.md`, one at a
   FoldPlan). A `torch.Tensor` in a port signature is a bug.
 - Config changes go through pydantic schemas. If a new option isn't representable in
   the schema, extend the schema first; never bypass validation.
-- Every run goes through the CLI (`mlpipe run` / `tune` / `predict` / `lineage`),
+- Every run goes through the CLI (`mlpipe run` / `tune` / `promote` / `predict` / `lineage`),
   never by importing internals — this guarantees a manifest exists for every execution.
 - GPU budget is 12 GB VRAM. Flag any model config that would exceed it before running.
 - No hosted/cloud storage of run data. Local only. Never commit secrets.
