@@ -86,3 +86,16 @@ Log:
   - classification metrics, step 12;
   - new step 16, `gc --dry-run`.
   No code changed.
+- 2026-10-20: work/0006 step 5. A top-level `PipelineConfig` (`core/config.py`)
+  validates `tracker`, `tune` and `download_dir`; any other non-step key, including
+  one set with `--set`, fails before any step runs. `tune` adds `metric`,
+  `direction` and `step`, plus a typed `space`; the hardcoded `mean_corr`/maximize
+  is gone (0007 A3, tune half). The top-level `seed` is **dropped**, not wired in:
+  as a top-level key it can never enter a signature, so wiring it to the backends
+  would let runs with different seeds share a cache entry. The backends keep their
+  seeds in hashed params and code defaults. Manifests no longer record
+  `environment.seed`. `download_dir` stays outside signatures on purpose, as a
+  location rather than content (existing ingest test). The Numerai config gains
+  `tune.metric: mean_corr`. Numerai step signatures are unchanged by this. The demo
+  step signatures change, because `demo.py` was edited. 84 tests green,
+  ruff clean. Orchestration modules 520 lines; config.py adds 65, outside that set.

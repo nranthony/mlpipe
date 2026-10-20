@@ -29,6 +29,10 @@ from a pinned git tag (ADR-0005); Numerai is its real-data example and test case
 - **Config:** pydantic v2 models composed from YAML. Swappable slots are discriminated
   unions (e.g. `model: LightGBMConfig | TorchConfig`). A small registry maps config
   type → implementation class. Validation errors must occur before any step runs.
+  A config is one subtree per step plus the top-level `PipelineConfig`
+  (`core/config.py`: `tracker`, `tune`, `download_dir`); any other top-level key is
+  rejected. Top-level keys sit outside every signature, so nothing that changes a
+  step's output may live there: seeds belong in the subtree of the step they affect.
 - **Hardware:** 12 GB VRAM GPU, i9-11900K. TorchBackend centralizes device placement
   and memory guards. Flag any config that would exceed 12 GB.
 - **No hosted/cloud storage of run data. Everything stays local.**
@@ -62,8 +66,8 @@ be a cache hit under the current config, or the run fails. It never serves outpu
 that a different config produced.
 
 **Run manifest** — one JSON file per step execution, append-only, in `manifests/`:
-step name, signature, timestamps, status, git commit, config hash, environment
-(lockfile hash, seed), input hashes, output hashes, metrics summary. Every output hash
+step name, signature, timestamps, status, git commit, config hash and resolved config
+subtree, environment (lockfile hash), input hashes, output hashes, metrics summary. Every output hash
 appears as an input hash in some later manifest → the lineage graph is implicit and
 walkable from any model back to raw data + config + commit.
 

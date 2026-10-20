@@ -42,6 +42,8 @@ DEFAULT_CONFIG = {
     "tune": {
         "study": "lgbm-medium",
         "storage": "sqlite:///mlruns/optuna.db",
+        "metric": "mean_corr",
+        "direction": "maximize",
         "n_trials": 3,
         "space": {
             "train.model.params.num_leaves": {"type": "int", "low": 16, "high": 64},
@@ -49,7 +51,6 @@ DEFAULT_CONFIG = {
             "train.model.params.colsample_bytree": {"type": "float", "low": 0.05, "high": 0.3},
         },
     },
-    "seed": 42,
 }
 
 

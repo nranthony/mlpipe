@@ -11,7 +11,6 @@ from mlpipe.core.interfaces import Step, StepResult
 DEFAULT_CONFIG = {
     "make_data": {"rows": 100, "seed": 1},
     "summarize": {"factor": 2},
-    "seed": 1,
 }
 
 

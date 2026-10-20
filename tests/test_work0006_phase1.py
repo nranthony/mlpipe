@@ -1,5 +1,6 @@
-"""work/0006 phase 1: era_slice smoke runs (step 2) and --from resolving
-upstream by current-config signature (step 3)."""
+"""work/0006 phase 1: era_slice smoke runs (step 2), --from resolving
+upstream by current-config signature (step 3), and the top-level
+PipelineConfig schema (step 5)."""
 
 from __future__ import annotations
 
@@ -9,6 +10,7 @@ from pydantic import ValidationError
 from test_cycle0_spine import MakeData, Summarize, seed_artifact
 from test_cycle3_clean import run_clean
 
+from mlpipe.core.config import validate_config
 from mlpipe.core.pipeline import Pipeline
 from mlpipe.core.store import LocalCasStore
 from mlpipe.steps.clean import CleanConfig, CleanStep, EraSlice, slice_eras
@@ -98,3 +100,58 @@ def test_full_run_after_upstream_change_recomputes_only_what_changed(env):
     two_step(store, tmp / "m").run(seeds=seeds)
     result = two_step(store, tmp / "m", factor=5).run(seeds=seeds)
     assert [m["status"] for m in result["manifests"]] == ["cached", "success"]
+
+
+# ---------------------------------------------------------------- PipelineConfig (step 5)
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"trakcer": {"kind": "mlflow"}},  # top-level typo
+        {"seed": 42},  # dropped: a top-level seed can never reach a signature
+        {"tracker": {"kind": "wandb"}},  # local only (DESIGN.md §0)
+        {"tune": {"study": "s", "storage": "sqlite://", "space": {}}},  # no metric
+    ],
+)
+def test_top_level_config_errors_die_before_any_step_runs(env, bad):
+    store, tmp = env
+    with pytest.raises(ValidationError):
+        Pipeline(
+            [MakeData(), Summarize()], store, tmp / "m", {"make_data": {"rows": 2}, **bad}
+        ).run()
+    assert not (tmp / "m" / "index.jsonl").exists()  # nothing ran, nothing written
+
+
+def test_override_typo_at_top_level_dies_too(env):
+    store, tmp = env
+    with pytest.raises(ValidationError):
+        two_step(store, tmp / "m").run(overrides=["trakcer.kind=mlflow"])
+
+
+def test_tune_space_is_typed_and_direction_defaults_to_maximize():
+    cfg = validate_config(
+        {
+            "tune": {
+                "study": "s", "storage": "sqlite://", "metric": "rmse", "direction": "minimize",
+                "space": {"a.b": {"type": "float", "low": 0.1, "high": 1.0, "log": True}},
+            },
+            "make_data": {"anything": "is the step's own business"},
+        },
+        ["make_data"],
+    )
+    assert cfg.tune.direction == "minimize" and cfg.tune.space["a.b"].log is True
+    assert cfg.tracker.kind == "none"
+    with pytest.raises(ValidationError):
+        validate_config(
+            {"tune": {"study": "s", "storage": "x", "metric": "m",
+                      "space": {"a": {"type": "categorical"}}}}, []
+        )
+
+
+@pytest.mark.parametrize("name", ["demo", "numerai"])
+def test_shipped_default_configs_validate(name):
+    import importlib
+
+    module = importlib.import_module(f"mlpipe.steps.{name}")
+    validate_config(module.DEFAULT_CONFIG, [s.name for s in module.build_steps()])

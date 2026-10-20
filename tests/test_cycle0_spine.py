@@ -65,7 +65,7 @@ def reset_counters():
 
 
 def build_pipeline(store, manifests, config=None):
-    cfg = {"make_data": {"rows": 2}, "summarize": {"factor": 1}, "seed": 42}
+    cfg = {"make_data": {"rows": 2}, "summarize": {"factor": 1}}
     if config:
         cfg.update(config)
     return Pipeline([MakeData(), Summarize()], store, manifests, cfg)

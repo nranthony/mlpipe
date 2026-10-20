@@ -11,6 +11,7 @@ from pathlib import Path
 import typer
 import yaml
 
+from mlpipe.core.config import PipelineConfig, validate_config
 from mlpipe.core.pipeline import Pipeline
 from mlpipe.core.store import LocalCasStore
 
@@ -30,30 +31,27 @@ def run(
     store_dir: Path = typer.Option(Path("store"), help="artifact store root"),
     manifests_dir: Path = typer.Option(Path("manifests"), help="manifest log root"),
 ) -> None:
-    module, cfg = _load_module_and_config(pipeline, config)
-    pipe = Pipeline(
-        module.build_steps(), LocalCasStore(store_dir), manifests_dir, cfg, _make_tracker(cfg)
-    )
+    steps, cfg, top = _load(pipeline, config)
+    pipe = Pipeline(steps, LocalCasStore(store_dir), manifests_dir, cfg, _make_tracker(top))
     result = pipe.run(from_step, to_step, overrides=set_, tag=tag)
     for m in result["manifests"]:
         typer.echo(f"{m['step']:<20} {m['status']:<8} sig={m['signature'][:8]} "
                    f"outputs={ {k: h[:8] for k, h in m['outputs'].items()} }")
 
 
-def _load_module_and_config(pipeline: str, config: Path | None):
+def _load(pipeline: str, config: Path | None) -> tuple[list, dict, PipelineConfig]:
+    """Steps, raw config, and the validated top-level keys (tracker, tune, ...)."""
     module = importlib.import_module(f"mlpipe.steps.{pipeline}")
     cfg = yaml.safe_load(config.read_text()) if config else getattr(module, "DEFAULT_CONFIG", {})
-    return module, cfg
+    steps = module.build_steps()
+    return steps, cfg, validate_config(cfg, [s.name for s in steps])
 
 
-def _make_tracker(cfg: dict):
-    if cfg.get("tracker", {}).get("kind") == "mlflow":
+def _make_tracker(top: PipelineConfig):
+    if top.tracker.kind == "mlflow":
         from mlpipe.trackers.mlflow_tracker import MlflowTracker
 
-        return MlflowTracker(
-            cfg["tracker"].get("uri", "sqlite:///mlruns/mlflow.db"),
-            cfg["tracker"].get("experiment", "mlpipe"),
-        )
+        return MlflowTracker(top.tracker.uri, top.tracker.experiment)
     return None
 
 
@@ -72,39 +70,40 @@ def tune(
     cleaner knob) recomputes honestly instead of being inert."""
     import optuna
 
-    module, cfg = _load_module_and_config(pipeline, config)
-    tcfg = cfg["tune"]
-    pipe = Pipeline(
-        module.build_steps(), LocalCasStore(store_dir), manifests_dir, cfg, _make_tracker(cfg)
-    )
+    steps, cfg, top = _load(pipeline, config)
+    tcfg = top.tune
+    if tcfg is None:
+        raise typer.BadParameter(f"pipeline {pipeline!r} config has no `tune` section")
+    pipe = Pipeline(steps, LocalCasStore(store_dir), manifests_dir, cfg, _make_tracker(top))
     study = optuna.create_study(
-        study_name=tcfg["study"],
-        storage=tcfg["storage"],
-        direction="maximize",
+        study_name=tcfg.study,
+        storage=tcfg.storage,
+        direction=tcfg.direction,
         load_if_exists=True,
     )
 
     def objective(trial: optuna.Trial) -> float:
         overrides = list(set_ or [])
-        for key, spec in tcfg["space"].items():
-            if spec["type"] == "int":
-                value = trial.suggest_int(key, spec["low"], spec["high"])
+        for key, spec in tcfg.space.items():
+            if spec.type == "int":
+                value = trial.suggest_int(key, spec.low, spec.high)
             else:
-                value = trial.suggest_float(key, spec["low"], spec["high"], log=spec.get("log", False))
+                value = trial.suggest_float(key, spec.low, spec.high, log=spec.log)
             overrides.append(f"{key}={value}")
         result = pipe.run(
-            to_step="evaluate", overrides=overrides,
-            tag=f"{tcfg['study']}-trial{trial.number}",
+            to_step=tcfg.step, overrides=overrides, tag=f"{tcfg.study}-trial{trial.number}"
         )
-        evaluated = [m for m in result["manifests"] if m["step"] == "evaluate"][-1]
-        return evaluated["metrics"]["mean_corr"]
+        metrics = [m for m in result["manifests"] if m["step"] == tcfg.step][-1]["metrics"]
+        if tcfg.metric not in metrics:
+            raise KeyError(f"tune.metric {tcfg.metric!r} not logged by {tcfg.step}: {sorted(metrics)}")
+        return metrics[tcfg.metric]
 
-    study.optimize(objective, n_trials=n_trials or tcfg.get("n_trials", 5))
+    study.optimize(objective, n_trials=n_trials or tcfg.n_trials)
     best = study.best_trial
     sets = " ".join(f"--set {k}={v}" for k, v in best.params.items())
     # tune never promotes (ADR-0006): it names the candidate; a human/agent decides.
     typer.echo(
-        f"best trial {best.number}: mean_corr={best.value:.5f}\n"
+        f"best trial {best.number}: {tcfg.metric}={best.value:.5f} ({tcfg.direction})\n"
         f"to promote: mlpipe run --pipeline {pipeline} {sets}  then  mlpipe promote <bundle>"
     )
 
@@ -149,8 +148,7 @@ def promote(
         m["step"]: {k: m.get(k) for k in ("config", "config_hash", "signature", "git_commit")}
         for m in reversed(chain)
     }
-    _, cfg = _load_module_and_config(pipeline, config)
-    tracker = _make_tracker(cfg)
+    tracker = _make_tracker(_load(pipeline, config)[2])
     version = None
     if tracker is not None:
         version = tracker.register_model(

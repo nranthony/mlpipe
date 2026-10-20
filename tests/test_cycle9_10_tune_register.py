@@ -61,6 +61,7 @@ def env(tmp_path_factory):
         "tune": {
             "study": "toy-study",
             "storage": f"sqlite:///{tmp}/optuna.db",
+            "metric": "mean_corr",
             "n_trials": 2,
             "space": {"train.model.params.num_leaves": {"type": "int", "low": 4, "high": 16}},
         },

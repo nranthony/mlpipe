@@ -23,7 +23,7 @@
 | 2 | `era_slice` smoke runs (clean step) + `--tag smoke` convention | 0003 | **done** 2026-10-20 |
 | 3 | `--from` resolves upstream by current-config signatures, not "latest ever"; `tune` no longer uses `--from` | 0004 C, 0002 gap 2 | **done** 2026-10-20 |
 | 4 | `mlpipe promote <bundle-hash>`; `register` stops auto-registering; `tune` stops writing baselines | ADR-0006, 0004 A, 0002 gap 3 | **done** 2026-10-20 |
-| 5 | Top-level `PipelineConfig` pydantic schema (tracker, tune, seed, download_dir); seed reaches backends or is dropped; `tune.metric` + `tune.direction` replace the hardcoded `mean_corr`/maximize | 0004 B, 0007 A3 (tune half) | todo |
+| 5 | Top-level `PipelineConfig` pydantic schema (tracker, tune, seed, download_dir); seed reaches backends or is dropped; `tune.metric` + `tune.direction` replace the hardcoded `mean_corr`/maximize | 0004 B, 0007 A3 (tune half) | **done** 2026-10-20 (seed dropped) |
 | 6 | `evaluate` scores the validation holdout too, side by side with OOF | 0004 F, 0007 D3 | todo |
 | 7 | Hygiene: demo vs real manifests apart, STATUS header, bootstrap twin (deletion = human step) | 0004 G | todo |
 | 7b | Manifest hardening: failed records carry `error` + `traceback`; environment adds `git_dirty`, `python_version`, `platform`, lockfile candidates (no CUDA probe in core); `fcntl.flock` around `index.jsonl` appends | 0007 A1, M5, M4, M3 | todo |

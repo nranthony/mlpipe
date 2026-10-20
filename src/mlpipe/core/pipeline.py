@@ -14,6 +14,7 @@ from typing import Any
 
 import yaml
 
+from mlpipe.core.config import validate_config
 from mlpipe.core.context import NoopTracker, RunContext
 from mlpipe.core.interfaces import Artifact, Step
 from mlpipe.core.manifest import ManifestLog, git_commit
@@ -33,12 +34,9 @@ def apply_overrides(config: dict, overrides: list[str] | None) -> dict:
     return config
 
 
-def environment_info(config: dict) -> dict:
+def environment_info() -> dict:
     lock = Path("uv.lock")
-    return {
-        "lockfile_hash": sha256_bytes(lock.read_bytes()) if lock.exists() else None,
-        "seed": config.get("seed"),
-    }
+    return {"lockfile_hash": sha256_bytes(lock.read_bytes()) if lock.exists() else None}
 
 
 def _now() -> str:
@@ -69,6 +67,8 @@ class Pipeline:
         seeds: list[Artifact] | None = None,
     ) -> dict[str, Any]:
         config = apply_overrides(self.config, overrides)
+        names = [s.name for s in self.steps]
+        validate_config(config, names)  # top-level typos die here too
         for step in self.steps:  # config typos die here, before any step runs
             model = getattr(step, "config_model", None)
             if model is not None:
@@ -78,8 +78,7 @@ class Pipeline:
         for artifact in seeds or []:
             ctx.register(artifact)
 
-        names = [s.name for s in self.steps]
-        lo = names.index(from_step) if from_step else 0
+        lo =names.index(from_step) if from_step else 0
         hi = names.index(to_step) + 1 if to_step else len(self.steps)
 
         # Upstream of --from is resolved by signature under the CURRENT config and
@@ -109,7 +108,7 @@ class Pipeline:
             "git_commit": git_commit(),
             "config_hash": config_hash(config, step.name),
             "config": config_subtree(config, step.name),  # what promote pins (ADR-0006)
-            "environment": environment_info(config),
+            "environment": environment_info(),
             "inputs": input_hashes,
             "tag": tag,
             "started_at": started,
