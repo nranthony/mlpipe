@@ -33,7 +33,7 @@
 | # | Step | State |
 |---|---|---|
 | 8 | Real-data smoke run (era_slice) through the whole chain; verify cache hit on rerun | **done** 2026-10-20 on **v6.0** (v5.x training files retired); plan `7c4df3df`, bundle `484a5c65` |
-| 9 | `FoldPlan.era_column` → `group_column` + `meta` (defaulted fields last); era/purge/embargo semantics into the CV step. DESIGN.md block 4 rule: FeatureStep fits are unsupervised, target-aware transforms fit per fold inside the backend (0007 D1, D2) | todo |
+| 9 | `FoldPlan.era_column` → `group_column` + `meta` (defaulted fields last); era/purge/embargo semantics into the CV step. DESIGN.md block 4 rule: FeatureStep fits are unsupervised, target-aware transforms fit per fold inside the backend (0007 D1, D2) | **done** 2026-10-20; plan hash unchanged (`7c4df3df` on v6.0) |
 | 10 | Declare the full `RunContext` surface in `interfaces.py`; test that steps use nothing else; drop dead `ModelBackend.fit(folds)` | todo (0004 E) |
 | 11 | Entry-point discovery: `mlpipe.pipelines`, `mlpipe.backends` (stdlib `importlib.metadata`). **Same step:** the signature closure treats the step's root package as first-party (plus `mlpipe.steps.`/`mlpipe.backends.`, never `mlpipe.core.`), with a test that a host-helper edit changes the signature (0007 M1) | todo |
 | 12 | Second-domain smoke pipeline (plain tabular, group k-fold) in tests, with generic regression/classification metrics (0007 D4) | todo |

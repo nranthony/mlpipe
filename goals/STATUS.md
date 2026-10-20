@@ -3,7 +3,7 @@
 **Current state (update in place; the log below is append-only):**
 - Build cycles 0–10: code complete since 2026-08-20.
 - Active work: work/0006 plan ([plan.md](../work/0006-core-library-extraction/plan.md)).
-  Phase 1 (steps 1–7b) done; phase 2 step 8 done; next is step 9.
+  Phase 1 (steps 1–7b) done; phase 2 steps 8–9 done; next is step 10.
 - Data: Numerai **v6.0** (v5.x training files are no longer served). Raw files are in
   `/workspace/raw_data/numerai/v6.0` (downloaded host-side 2026-10-20).
 - Real data: **smoke-proven only** (2026-10-20): the whole chain on 100 eras, cache-hit
@@ -178,3 +178,20 @@ Log:
     signatures are unaffected.
   - **Not done:** `predict` doesn't emit `numerai_ticker` (needed for a v6 submission;
     step 13 makes `predict` domain-free). 92 tests green, ruff clean.
+- 2026-10-20: work/0006 step 9, a domain-free `FoldPlan` (0007 D1, D2).
+  - `FoldPlan` is now `folds, plan_hash, group_column=None, meta={}`, with the
+    defaulted fields last (D2's correction). Era/purge/embargo are the CV step's
+    semantics: `cvplan` sets `group_column` to its era column and puts purge/embargo
+    in `meta`. Nothing downstream read the old fields.
+  - The plan hash still covers (era list, `CVConfig`) only, so it is unchanged. A
+    pinned-hash test guards this. On real v6.0 data the smoke rerun kept plan
+    `7c4df3df`: ingest→features were cached, and cvplan onward re-ran because their
+    code changed. The model, OOF predictions, eval report and bundle `484a5c65` came
+    out byte-identical. Only the plotly chart HTML differs.
+  - D1 rule, now in DESIGN.md block 4: FeatureStep fits are unsupervised (X only).
+    A target-aware transform fits per fold inside the backend. A spy test asserts
+    `fit` gets the feature matrix and `y=None`.
+  - Numerai repo: opened `work/0011-v6-data-migration` there (`d46b931`). v5.x
+    training data is retired, `target_ender_20` is gone, and the frozen holdout's era
+    ids don't exist in v6.0.
+  - 96 tests green, ruff clean.

@@ -3,6 +3,10 @@
 Era-aware, purged, embargoed CV. The FoldPlan is an artifact with its own
 plan_hash over (era list, cv config) — model comparisons must cite the same
 plan hash, and assert_same_plan() is the guard that enforces it.
+
+Era/purge/embargo are this step's semantics: the FoldPlan it emits is generic
+(era column as `group_column`, purge/embargo in `meta`). The plan hash is
+computed from CVConfig as before, so it did not change with that refactor.
 """
 
 from __future__ import annotations
@@ -42,10 +46,9 @@ def build_plan(eras: pl.Series, cfg: CVConfig) -> FoldPlan:
     )
     return FoldPlan(
         folds=folds,
-        era_column=cfg.era_column,
-        purge_eras=cfg.purge_eras,
-        embargo_eras=cfg.embargo_eras,
         plan_hash=plan_hash,
+        group_column=cfg.era_column,
+        meta={"purge_eras": cfg.purge_eras, "embargo_eras": cfg.embargo_eras},
     )
 
 
