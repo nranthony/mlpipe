@@ -1,19 +1,24 @@
-"""The real Numerai pipeline, assembled cycle by cycle.
+"""The real Numerai pipeline, plus its serving hooks for `mlpipe predict`.
 
     mlpipe run --pipeline numerai
+    mlpipe predict --pipeline numerai            # latest live snapshot
 """
 
 from __future__ import annotations
 
+from typing import Any
+
+import polars as pl
+
 from mlpipe.core.interfaces import Step
-from mlpipe.steps.clean import CleanStep
+from mlpipe.examples.numerai.clean import CleanStep
+from mlpipe.examples.numerai.evaluate import EvaluateStep
+from mlpipe.examples.numerai.ingest import IngestStep
+from mlpipe.examples.numerai.validate import ValidateStep
 from mlpipe.steps.cvplan import CVPlanStep
-from mlpipe.steps.evaluate import EvaluateStep
 from mlpipe.steps.features import FeatureStep
-from mlpipe.steps.ingest import IngestStep
 from mlpipe.steps.register import RegisterStep
 from mlpipe.steps.train import TrainStep
-from mlpipe.steps.validate import ValidateStep
 
 DEFAULT_CONFIG = {
     "download_dir": "/workspace/raw_data/numerai",  # shared profile-wide cache
@@ -77,3 +82,24 @@ def build_steps() -> list[Step]:
         EvaluateStep(),
         RegisterStep(),
     ]
+
+
+# --------------------------------------------------------------- serving hooks
+
+
+def serve_input(log: Any, store: Any) -> tuple[pl.DataFrame, str]:
+    """Default input when `mlpipe predict` gets no --input: the latest ingested
+    live snapshot."""
+    live_hash = log.latest_outputs()["raw_live"]
+    return store.load(live_hash), f"live {live_hash[:8]}"
+
+
+def prepare(frame: pl.DataFrame, bundle: dict[str, Any]) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """(features in bundle order, id columns for the output). Replays the
+    cleaner's stateless fill, and keys rows by `numerai_ticker` (what a v6.0
+    submission is keyed by) plus the era under its canonical name."""
+    feats = frame.select(bundle["features"])
+    if bundle["cleaner"].get("kind") == "baseline":
+        feats = feats.with_columns(pl.all().fill_null(bundle["cleaner"].get("fill_value", 2)))
+    ids = [c for c in ("numerai_ticker",) if c in frame.columns]
+    return feats, frame.select(*ids, pl.col(bundle.get("era_column", "era")).alias("era"))

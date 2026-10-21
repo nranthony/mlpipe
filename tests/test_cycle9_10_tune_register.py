@@ -72,8 +72,9 @@ def env(tmp_path_factory):
         "--config", str(cfg_path),
         "--store-dir", str(tmp / "store"),
         "--manifests-dir", str(tmp / "manifests"),
+        "--pipeline", "numerai",
     ]
-    result = runner.invoke(app, ["run", "--pipeline", "numerai", *dirs])
+    result = runner.invoke(app, ["run", *dirs])
     assert result.exit_code == 0, result.output
     return tmp, cfg_path, dirs
 
@@ -144,7 +145,21 @@ def test_cycle10_fresh_process_predicts_from_raw_live(env):
     )
     assert proc.returncode == 0, proc.stderr
     preds = pl.read_parquet(out)
-    assert preds.height == 120 and "prediction" in preds.columns
+    assert preds.height == 120 and preds.columns == ["era", "prediction"]  # toy live: no ticker
+
+
+def test_work0006_predict_scores_an_explicit_input_keyed_by_ticker(env):
+    tmp, _, dirs = env
+    promote(tmp, dirs, bundle_hash_of(tmp))
+    live = pl.read_parquet(tmp / "raw" / "v0-toy" / "live.parquet").head(7)
+    src = tmp / "to_score.parquet"
+    live.with_columns(pl.Series("numerai_ticker", [f"T{i}" for i in range(7)])).write_parquet(src)
+    out = tmp / "explicit.parquet"
+    result = runner.invoke(app, ["predict", *dirs[2:], "--input", str(src),
+                                 "--baselines", str(tmp / "baselines.yaml"), "--out", str(out)])
+    assert result.exit_code == 0, result.output
+    preds = pl.read_parquet(out)
+    assert preds.columns == ["numerai_ticker", "era", "prediction"] and preds.height == 7
 
 
 def test_cycle10_lineage_from_registered_bundle_reaches_raw_snapshot(env):
@@ -162,7 +177,7 @@ def test_cycle9_tune_runs_resume_and_never_promotes(env):
     tmp, _, dirs = env
     before = (tmp / "baselines.yaml").read_text() if (tmp / "baselines.yaml").exists() else None
     for _ in range(2):  # second invocation resumes the same study
-        result = runner.invoke(app, ["tune", "--pipeline", "numerai", "--n-trials", "2", *dirs])
+        result = runner.invoke(app, ["tune", "--n-trials", "2", *dirs])
         assert result.exit_code == 0, result.output
     assert "train.model.params.num_leaves=" in result.output  # names the candidate
 

@@ -13,7 +13,7 @@ import polars as pl
 from pydantic import BaseModel
 
 from mlpipe.core.interfaces import Step, StepResult
-from mlpipe.steps.eval_metrics import era_scores, feature_exposure, summarize
+from mlpipe.examples.numerai.eval_metrics import era_scores, feature_exposure, summarize
 
 
 class EvalConfig(BaseModel):

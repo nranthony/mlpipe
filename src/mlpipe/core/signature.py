@@ -24,7 +24,7 @@ from typing import Any
 # deliberately excluded: it is the orchestrator, not the computation, and
 # including it would invalidate every cached artifact on any core edit. Core
 # changes are covered by tests and by the git_commit in every manifest.
-FIRST_PARTY = ("mlpipe.steps.", "mlpipe.backends.")
+FIRST_PARTY = ("mlpipe.steps.", "mlpipe.backends.", "mlpipe.examples.")
 
 
 def sha256_bytes(data: bytes) -> str:

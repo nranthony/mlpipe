@@ -20,6 +20,8 @@ app = typer.Typer(add_completion=False, no_args_is_help=True)
 # One manifest log per pipeline (work/0004 G): a demo run must not land in the
 # real pipeline's history. The store stays shared — content addressing dedupes it.
 MANIFESTS = typer.Option(None, help="manifest log root (default: manifests/<pipeline>)")
+# No default: the CLI is domain-free and names no pipeline of its own.
+PIPELINE = typer.Option(..., help="registered pipeline (builtin or mlpipe.pipelines entry point)")
 
 
 def _log_dir(pipeline: str, manifests_dir: Path | None) -> Path:
@@ -28,7 +30,7 @@ def _log_dir(pipeline: str, manifests_dir: Path | None) -> Path:
 
 @app.command()
 def run(
-    pipeline: str = typer.Option("demo", help="registered pipeline (builtin or mlpipe.pipelines entry point)"),
+    pipeline: str = PIPELINE,
     from_step: str = typer.Option(
         None, "--from", help="first step to run; upstream must be cached under this config"
     ),
@@ -66,7 +68,7 @@ def _make_tracker(top: PipelineConfig):
 
 @app.command()
 def tune(
-    pipeline: str = typer.Option("numerai"),
+    pipeline: str = PIPELINE,
     n_trials: int = typer.Option(None, help="trials this invocation (study resumes)"),
     set_: list[str] = typer.Option(None, "--set", help="fixed overrides applied to every trial"),
     config: Path = typer.Option(None),
@@ -133,7 +135,7 @@ def _resolve_bundle(log, prefix: str) -> str:
 def promote(
     bundle: str = typer.Argument(help="model_bundle hash (or unique prefix)"),
     alias: str = typer.Option("champion"),
-    pipeline: str = typer.Option("numerai"),
+    pipeline: str = PIPELINE,
     config: Path = typer.Option(None),
     store_dir: Path = typer.Option(Path("store")),
     manifests_dir: Path = MANIFESTS,
@@ -158,19 +160,20 @@ def promote(
         m["step"]: {k: m.get(k) for k in ("config", "config_hash", "signature", "git_commit")}
         for m in reversed(chain)
     }
+    # plan_hash/target are optional: a bundle from a pipeline without CV or a
+    # single named target still promotes; the pin records what the bundle has.
+    plan_hash, target = content.get("plan_hash"), content.get("target")
     tracker = _make_tracker(_load(pipeline, config)[2])
     version = None
     if tracker is not None:
-        version = tracker.register_model(
-            Artifact("model_bundle", full, store.path_of(full), {"plan_hash": content["plan_hash"]}),
-            name,
-        )
+        meta = {"plan_hash": plan_hash} if plan_hash else {}
+        version = tracker.register_model(Artifact("model_bundle", full, store.path_of(full), meta), name)
         tracker.set_alias(name, alias, version)
     now = datetime.now(UTC).isoformat()
     pinned = {
         "model_name": name, "alias": alias, "registry_version": version,
-        "bundle_hash": full, "plan_hash": content["plan_hash"], "target": content["target"],
-        "metrics": content["metrics"], "steps": steps,
+        "bundle_hash": full, "plan_hash": plan_hash, "target": target,
+        "metrics": content.get("metrics", {}), "steps": steps,
         "promoted_at": now, "git_commit": git_commit(),
     }
     baselines.write_text(yaml.safe_dump({"promoted": pinned}, sort_keys=True))
@@ -180,25 +183,37 @@ def promote(
         "meta": {"name": name, "alias": alias, "registry_version": version},
         "git_commit": pinned["git_commit"], "started_at": now, "ended_at": now,
     })
-    typer.echo(f"promoted {name}@{alias} -> bundle {full[:8]} (plan {content['plan_hash'][:8]}, "
+    typer.echo(f"promoted {name}@{alias} -> bundle {full[:8]} (plan {(plan_hash or '-')[:8]}, "
                f"registry v{version}) -> {baselines}")
+
+
+def _default_prepare(frame, bundle: dict):
+    """(features in bundle order, id columns to carry into the output)."""
+    return frame.select(bundle["features"]), frame.select(bundle.get("id_columns", []))
 
 
 @app.command()
 def predict(
     bundle: str = typer.Option(None, help="model_bundle hash/prefix (default: baselines.yaml)"),
-    pipeline: str = typer.Option("numerai"),
+    pipeline: str = PIPELINE,
+    input_: Path = typer.Option(
+        None, "--input", help="parquet to score (default: the pipeline's serve_input hook)"
+    ),
     store_dir: Path = typer.Option(Path("store")),
     manifests_dir: Path = MANIFESTS,
     baselines: Path = typer.Option(Path("baselines.yaml")),
     out: Path = typer.Option(Path("predictions.parquet")),
 ) -> None:
-    """Serve: load the promoted bundle (or an explicit one) and predict on the
-    latest raw_live snapshot — no access to training internals, no MLflow."""
+    """Serve: load the promoted bundle (or an explicit one) and predict on --input
+    or the pipeline's default serving input — no training internals, no MLflow.
+
+    Pipeline hooks (both optional): `serve_input(log, store) -> (frame, label)`
+    and `prepare(frame, bundle) -> (features, ids)`; the output is ids + prediction."""
     import polars as pl
 
     from mlpipe.core.manifest import ManifestLog
 
+    module = pipeline_module(pipeline)
     log, store = ManifestLog(_log_dir(pipeline, manifests_dir)), LocalCasStore(store_dir)
     if bundle:
         bundle_hash = _resolve_bundle(log, bundle)
@@ -212,27 +227,29 @@ def predict(
             )
     content = store.load(bundle_hash)
 
-    live_hash = log.latest_outputs()["raw_live"]
-    live = store.load(live_hash)
-    feats = live.select(content["features"])
-    if content["cleaner"].get("kind") == "baseline":
-        feats = feats.with_columns(pl.all().fill_null(content["cleaner"].get("fill_value", 2)))
+    if input_ is not None:
+        frame, source = pl.read_parquet(input_), str(input_)
+    elif hasattr(module, "serve_input"):
+        frame, source = module.serve_input(log, store)
+    else:
+        raise typer.BadParameter(f"pipeline {pipeline!r} has no serve_input hook; pass --input")
+    feats, ids = getattr(module, "prepare", _default_prepare)(frame, content)
     transformer = store.load(content["transformer_hash"])
     matrix = transformer.transform(feats.to_numpy())
     model = store.load(content["model_hash"])["full"]
     preds = model.predict(pl.from_numpy(matrix, schema=content["features"]))
-    frame = pl.DataFrame({"era": live[content.get("era_column", "era")], "prediction": preds})
-    frame.write_parquet(out)
+    result = ids.with_columns(pl.Series("prediction", preds))
+    result.write_parquet(out)
     typer.echo(
         f"{content.get('model_name', '?')} (bundle {bundle_hash[:8]}, "
-        f"plan {content['plan_hash'][:8]}) -> {out} ({frame.height} rows, live {live_hash[:8]})"
+        f"plan {(content.get('plan_hash') or '-')[:8]}) -> {out} ({result.height} rows, {source})"
     )
 
 
 @app.command()
 def lineage(
     content_hash: str,
-    pipeline: str = typer.Option("numerai"),
+    pipeline: str = PIPELINE,
     manifests_dir: Path = MANIFESTS,
 ) -> None:
     from mlpipe.core.manifest import ManifestLog

@@ -12,7 +12,7 @@ from pydantic import ValidationError
 
 from mlpipe.core.pipeline import Pipeline
 from mlpipe.core.store import LocalCasStore
-from mlpipe.steps.clean import CLEANERS, BaselineCleanConfig, CleanStep
+from mlpipe.examples.numerai.clean import CLEANERS, BaselineCleanConfig, CleanStep
 
 FEATURES_META = {
     "feature_sets": {"all": ["feature_alpha", "feature_beta"], "small": ["feature_alpha"]},

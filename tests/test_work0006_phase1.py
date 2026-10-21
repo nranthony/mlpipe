@@ -13,7 +13,7 @@ from test_cycle3_clean import run_clean
 from mlpipe.core.config import validate_config
 from mlpipe.core.pipeline import Pipeline
 from mlpipe.core.store import LocalCasStore
-from mlpipe.steps.clean import CleanConfig, CleanStep, EraSlice, slice_eras
+from mlpipe.examples.numerai.clean import CleanConfig, CleanStep, EraSlice, slice_eras
 
 ERAS = [f"e{i:02d}" for i in range(10)]
 
@@ -151,9 +151,9 @@ def test_tune_space_is_typed_and_direction_defaults_to_maximize():
 
 @pytest.mark.parametrize("name", ["demo", "numerai"])
 def test_shipped_default_configs_validate(name):
-    import importlib
+    from mlpipe.plugins import pipeline_module
 
-    module = importlib.import_module(f"mlpipe.steps.{name}")
+    module = pipeline_module(name)
     validate_config(module.DEFAULT_CONFIG, [s.name for s in module.build_steps()])
 
 
@@ -252,7 +252,7 @@ def v6_frame() -> pl.DataFrame:
 
 
 def test_v6_validate_accepts_date_era_and_mixed_feature_dtypes(env):
-    from mlpipe.steps.validate import ValidateStep
+    from mlpipe.examples.numerai.validate import ValidateStep
 
     store, tmp = env
     seeds = [store.save(v6_frame(), k, ext="parquet") for k in ("raw_train", "raw_validation", "raw_live")]
@@ -287,7 +287,7 @@ def test_v6_clean_renames_era_and_drops_excluded_features(env):
 
 def test_v6_null_bound_is_per_dtype(env):
     """Sparse Float32 factors pass under their own bound; an Int8 null still fails."""
-    from mlpipe.steps.validate import ValidateStep
+    from mlpipe.examples.numerai.validate import ValidateStep
 
     store, tmp = env
     sparse = v6_frame().with_columns(pl.Series("feature_f", [None, 0.2, 0.3, 0.4], pl.Float32))

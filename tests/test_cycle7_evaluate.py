@@ -8,9 +8,9 @@ import pytest
 
 from mlpipe.core.pipeline import Pipeline
 from mlpipe.core.store import LocalCasStore
+from mlpipe.examples.numerai.eval_metrics import era_scores, summarize
+from mlpipe.examples.numerai.evaluate import EvaluateStep
 from mlpipe.steps.cvplan import CVConfig, build_plan
-from mlpipe.steps.eval_metrics import era_scores, summarize
-from mlpipe.steps.evaluate import EvaluateStep
 from mlpipe.trackers.mlflow_tracker import MlflowTracker
 
 

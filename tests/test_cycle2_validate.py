@@ -8,7 +8,7 @@ import pytest
 from mlpipe.core.interfaces import Step, StepResult
 from mlpipe.core.pipeline import Pipeline
 from mlpipe.core.store import LocalCasStore
-from mlpipe.steps.validate import ValidateStep
+from mlpipe.examples.numerai.validate import ValidateStep
 
 FEATURES_META = {
     "feature_sets": {"all": ["feature_alpha", "feature_beta"], "small": ["feature_alpha"]},

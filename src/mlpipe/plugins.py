@@ -24,7 +24,7 @@ BACKENDS = "mlpipe.backends"
 
 BUILTIN_PIPELINES = {
     "demo": "mlpipe.steps.demo",
-    "numerai": "mlpipe.steps.numerai",
+    "numerai": "mlpipe.examples.numerai.pipeline",
 }
 
 

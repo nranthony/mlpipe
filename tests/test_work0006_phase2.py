@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import ast
 import inspect
+import re
 import sys
 from pathlib import Path
 
 import numpy as np
 import polars as pl
 import pytest
+import yaml
 from sklearn.preprocessing import StandardScaler
 from typer.testing import CliRunner
 
@@ -20,6 +22,7 @@ from mlpipe.backends.torch_backend import TorchMLPBackend
 from mlpipe.cli import app
 from mlpipe.core import context, interfaces
 from mlpipe.core.interfaces import FoldPlan
+from mlpipe.core.manifest import ManifestLog
 from mlpipe.core.pipeline import Pipeline
 from mlpipe.core.signature import code_hash, code_modules, module_code_hash
 from mlpipe.core.store import LocalCasStore
@@ -267,3 +270,58 @@ def test_work0006_model_artifact_carries_backend_code(host_site, tmp_path):
     assert pipe.run()["artifacts"]["model"].content_hash != first
     with pytest.raises(ModuleNotFoundError):
         module_code_hash("hostpkg.nope")
+
+
+# --------------------------------------------------------------------------- step 13
+
+SRC = Path(interfaces.__file__).parents[1]  # src/mlpipe
+
+
+def test_work0006_cli_names_no_numerai_artifacts():
+    text = (SRC / "cli.py").read_text()
+    for name in (r"\bera\b", "era_column", "raw_live", "mean_corr", "(?i)numerai", "ticker"):
+        assert not re.search(name, text), f"cli.py names {name!r}"
+
+
+def test_work0006_nothing_generic_imports_the_examples():
+    """mlpipe.examples is a leaf: core, steps, backends, trackers and the CLI
+    never import it (plugins names the builtin pipelines as strings only)."""
+    leaks = []
+    for path in SRC.rglob("*.py"):
+        if "examples" in path.relative_to(SRC).parts:
+            continue
+        for node in ast.walk(ast.parse(path.read_text())):
+            names = ([a.name for a in node.names] if isinstance(node, ast.Import)
+                     else [node.module or ""] if isinstance(node, ast.ImportFrom) else [])
+            leaks += [f"{path.relative_to(SRC)}: {n}" for n in names if n.startswith("mlpipe.examples")]
+    assert not leaks
+
+
+def test_work0006_example_steps_also_use_only_the_run_context_surface():
+    surface = declared_surface()
+    stray = [f"{p.name}:{line} ctx.{attr}" for p in sorted((SRC / "examples").rglob("*.py"))
+             for line, attr in ctx_uses(p) if attr not in surface]
+    assert not stray
+
+
+def test_work0006_promote_accepts_a_bundle_without_plan_or_target(tmp_path):
+    store, log = LocalCasStore(tmp_path / "store"), ManifestLog(tmp_path / "m")
+    bundle = store.save({"model_name": "plain", "metrics": {"rmse": 1.0}}, "model_bundle", ext="json")
+    log.write({"step": "register", "status": "success", "signature": "s", "inputs": {},
+               "outputs": {"model_bundle": bundle.content_hash}, "metrics": {}, "meta": {},
+               "config": {}, "git_commit": None})
+    baselines = tmp_path / "baselines.yaml"
+    result = CliRunner().invoke(app, [
+        "promote", bundle.content_hash[:10], "--pipeline", "demo", "--store-dir",
+        str(tmp_path / "store"), "--manifests-dir", str(tmp_path / "m"), "--baselines", str(baselines),
+    ])
+    assert result.exit_code == 0, result.output
+    pinned = yaml.safe_load(baselines.read_text())["promoted"]
+    assert pinned["plan_hash"] is None and pinned["target"] is None
+    assert pinned["metrics"] == {"rmse": 1.0}
+
+
+def test_work0006_every_command_requires_a_pipeline():
+    for cmd in (["run"], ["tune"], ["promote", "abc"], ["predict"], ["lineage", "abc"]):
+        result = CliRunner().invoke(app, cmd)
+        assert result.exit_code != 0 and "--pipeline" in result.output, cmd

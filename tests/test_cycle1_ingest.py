@@ -13,7 +13,7 @@ import pytest
 
 from mlpipe.core.pipeline import Pipeline
 from mlpipe.core.store import LocalCasStore
-from mlpipe.steps.ingest import DATASETS, IngestStep
+from mlpipe.examples.numerai.ingest import DATASETS, IngestStep
 
 
 def fixture_frame(rows: int = 6) -> pl.DataFrame:

@@ -38,8 +38,9 @@ current system. Work proceeds in cycles defined by `goals/cycleN_*.md`, one at a
   tracker SDK calls, no model-library imports in step modules outside the backends.
 - Polars DataFrames cross step boundaries; Parquet at rest; DuckDB allowed inside a
   step only. Never let pandas or DuckDB types leak across a boundary.
-- `src/mlpipe/core/` stays free of Numerai-specific imports. Domain code lives in
-  `src/mlpipe/steps/` and `src/mlpipe/backends/`.
+- Only `src/mlpipe/examples/` holds domain code (Numerai: `examples/numerai/`).
+  `core/`, `steps/` (generic reusable steps), `backends/`, `trackers/` and `cli.py`
+  never import it; `cli.py` names no Numerai artifact. Both rules are test-enforced.
 - Core boundary (ADR-0004): `src/mlpipe/core/` imports only the stdlib, the base deps
   and itself (`tests/test_core_boundary.py`). Adapters live outside core
   (`mlpipe.trackers`, `mlpipe.backends`). Size is a soft signal: if the orchestration

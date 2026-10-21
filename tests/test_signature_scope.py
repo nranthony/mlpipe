@@ -14,7 +14,7 @@ import pytest
 
 from mlpipe.core import signature as sig
 from mlpipe.core.interfaces import Step, StepResult
-from mlpipe.steps.evaluate import EvaluateStep
+from mlpipe.examples.numerai.evaluate import EvaluateStep
 from mlpipe.steps.train import TrainStep
 
 # --------------------------------------------------------------- real modules
@@ -37,7 +37,7 @@ def test_switching_backend_switches_the_hashed_files():
 
 def test_evaluate_closure_covers_its_helper_module():
     """evaluate.py imports eval_metrics.py — the metric functions are behaviour."""
-    assert "mlpipe.steps.eval_metrics" in sig.code_modules(EvaluateStep(), {})
+    assert "mlpipe.examples.numerai.eval_metrics" in sig.code_modules(EvaluateStep(), {})
 
 
 def test_core_is_excluded_from_the_closure():

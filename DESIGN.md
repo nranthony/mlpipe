@@ -140,8 +140,14 @@ protocol. Plotting/metrics hide behind plain functions, not classes.
 ## 5. Agent surface
 
 - **Write path:** one CLI verb.
-  `mlpipe run --from <block> --to <block> --set key=value ... --tag <exp>`
-  Every agent action is a shell command that lands in the manifest.
+  `mlpipe run --pipeline <name> --from <block> --to <block> --set key=value ... --tag <exp>`
+  Every agent action is a shell command that lands in the manifest. `--pipeline` is
+  required on every verb: the CLI is domain-free and has no default pipeline.
+- **Serving:** `mlpipe predict --pipeline <name> [--bundle <hash>] [--input <parquet>]`.
+  Without `--input` the pipeline's optional `serve_input(log, store)` hook supplies
+  the frame (Numerai: the latest live snapshot). An optional `prepare(frame, bundle)`
+  hook returns `(features, ids)` (Numerai: the cleaner fill, `numerai_ticker` + `era`).
+  The default selects the bundle's features and its `id_columns`. Output: ids + `prediction`.
 - **Read path:** manifests (grep-able JSON), MLflow UI + MLflow MCP server for run
   comparison. Optional: generate plotly HTML comparisons from the tracking API.
 - Config typos must die at pydantic validation, not at hour six of training.
@@ -182,7 +188,9 @@ appear after the host package is (re)installed. Before the first tag:
 
 - the core is domain-neutral: no era concepts in ports, and the import boundary is
   test-enforced;
-- the Numerai pipeline lives in `examples/numerai/`;
+- the Numerai pipeline lives in `mlpipe.examples.numerai` (done; inside the wheel as a
+  builtin pipeline rather than a separate package, decision 2026-10-21, so it runs
+  without a reinstall);
 - a second, non-Numerai smoke pipeline passes (done: `tests/test_work0006_second_domain.py`,
   grouped customer data, regression and binary).
 
