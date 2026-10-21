@@ -10,7 +10,9 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 import pytest
+from typer.testing import CliRunner
 
+from mlpipe.cli import app
 from mlpipe.core.interfaces import Step, StepResult
 from mlpipe.core.pipeline import Pipeline
 from mlpipe.core.store import LocalCasStore
@@ -63,7 +65,7 @@ def config(task: str) -> dict:
         "cvplan": {"n_folds": 4, "group_column": "customer_id"},
         "train": {"model": {"kind": kind, "params": params}, "target": target},
         "evaluate": {"task": task, "target": target},
-        "register": {"model_name": f"churn-{task}"},
+        "register": {"model_name": f"churn-{task}", "id_columns": ["customer_id"]},
     }
 
 
@@ -91,6 +93,23 @@ def test_work0006_second_domain_runs_end_to_end_and_caches(env, task):
 
     again = Pipeline(steps(), store, manifests, config(task)).run()
     assert {m["status"] for m in again["manifests"]} == {"cached"}
+
+
+def test_work0006_default_prepare_carries_the_bundle_id_columns(env, tmp_path):
+    """`demo` has no prepare hook, so predict uses the default: bundle features
+    in, the register step's `id_columns` carried through to the output."""
+    store, manifests = env
+    result = Pipeline(steps(), store, manifests, config("regression")).run()
+    bundle = result["artifacts"]["model_bundle"].content_hash
+    src, out = tmp_path / "score.parquet", tmp_path / "preds.parquet"
+    customers(5, 2000, np.random.default_rng(3)).write_parquet(src)
+    cli = CliRunner().invoke(app, [
+        "predict", "--pipeline", "demo", "--bundle", bundle[:10], "--input", str(src),
+        "--store-dir", str(tmp_path / "store"), "--manifests-dir", str(manifests), "--out", str(out),
+    ])
+    assert cli.exit_code == 0, cli.output
+    preds = pl.read_parquet(out)
+    assert preds.columns == ["customer_id", "prediction"] and preds.height == 30
 
 
 def test_work0006_group_kfold_never_splits_a_customer():

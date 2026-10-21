@@ -82,8 +82,7 @@ def test_cycle8_backend_roundtrip(tmp_path):
     backend = TorchMLPBackend()
     backend.fit(X, y, TORCH_PARAMS)
     preds = backend.predict(X)
-    path = tmp_path / "model.joblib"
-    backend.save(path)
-    fresh = TorchMLPBackend()
-    fresh.load(path)
+    # The persistence path train uses: the fitted object itself, through the store.
+    store = LocalCasStore(tmp_path / "store")
+    fresh = store.load(store.save(backend, "model", ext="joblib").content_hash)
     assert np.allclose(fresh.predict(X), preds, atol=1e-6)

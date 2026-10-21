@@ -15,6 +15,9 @@ from mlpipe.core.interfaces import Step, StepResult
 
 class RegisterConfig(BaseModel):
     model_name: str = "model"
+    # Columns `predict` carries from the scored frame into its output (the
+    # default prepare hook reads them from the bundle), e.g. a row key.
+    id_columns: list[str] = []
 
 
 class RegisterStep(Step):
@@ -45,6 +48,8 @@ class RegisterStep(Step):
             "cleaner": clean.get("cleaner", {}),
             "model_config": ctx.config.get("train", {}).get("model", {}),
         }
+        if cfg.id_columns:
+            bundle["id_columns"] = cfg.id_columns
         if "era_column" in clean:  # raw source name, for era-keyed serving (Numerai)
             bundle["era_column"] = clean["era_column"]
         art = ctx.put(bundle, "model_bundle", ext="json")

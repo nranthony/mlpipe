@@ -73,7 +73,9 @@ class Tracker(Protocol):
 
 @runtime_checkable
 class ModelBackend(Protocol):
-    """SageMaker-Estimator-equivalent. One adapter per model family."""
+    """SageMaker-Estimator-equivalent. One adapter per model family. No save/load:
+    the train step stores the fitted backend object itself (joblib, via the
+    store), so an adapter must be picklable and needs no persistence code."""
 
     def fit(
         self,
@@ -82,8 +84,6 @@ class ModelBackend(Protocol):
         params: dict[str, Any],
     ) -> None: ...
     def predict(self, X: pl.DataFrame) -> np.ndarray: ...
-    def save(self, path: Path) -> None: ...
-    def load(self, path: Path) -> None: ...
 
 
 # --------------------------------------------------------------------------- core

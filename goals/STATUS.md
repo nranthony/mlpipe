@@ -321,3 +321,24 @@ Log:
   - Human steps left for v0.1.0: bump `version` to 0.1.0 in `pyproject.toml` and run
     `uv lock` host-side (`uv lock` is denied in the sandbox), commit, `git tag v0.1.0`,
     push with tags.
+- 2026-10-21 — **Review fixes (Gemini review of step 13), before the v0.1.0 tag.**
+  All four notes checked against the code and found valid:
+  - Signature closure skipped relative imports (`from .helpers import f`, `from . import
+    mod`), so a host package using them could edit a helper without moving the step's
+    signature. They now resolve against the importing module's package. Nothing in
+    `src/mlpipe` uses relative imports, so no existing mlpipe signature moves. Test
+    added.
+  - An unknown `--pipeline` raised a raw `KeyError` traceback. The CLI now reports it
+    as a usage error (exit 2) on run, tune, promote and predict. Test added.
+  - The default `prepare` hook read `bundle["id_columns"]`, but nothing wrote it, so
+    a hook-less pipeline's predictions had no key column. `register.id_columns`
+    (default empty, written only when set) now fills it. Tested end to end through
+    `predict --pipeline demo --input` on the second domain.
+  - `ModelBackend.save/load` were never called: train pickles the fitted backend
+    object through the store. Dropped from the port, both backends and the host test
+    backend before v0.1.0 freezes the API. The torch round-trip test now uses the
+    store path. Editing the backend modules moves `backend_code`, so Numerai's
+    train (and everything after it) goes cold once.
+  - Orchestration modules at 599 lines (signature.py +12 for relative imports); at
+    the ~600 signal, justified as a correctness fix with no new concept.
+  - 120 tests green, ruff clean.

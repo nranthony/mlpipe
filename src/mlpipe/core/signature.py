@@ -65,15 +65,28 @@ def _first_party(own: str) -> tuple[str, ...]:
     return FIRST_PARTY if root in ("mlpipe", "__main__") else (*FIRST_PARTY, f"{root}.")
 
 
-def _imports(path: Path, prefixes: tuple[str, ...]) -> set[str]:
+def _from_base(node: ast.ImportFrom, name: str, path: Path) -> str | None:
+    """Absolute module a `from X import ...` reads from; relative forms
+    (`from .helpers import f`, `from .. import mod`) resolve against the
+    importing module's package. None if unresolvable (e.g. a __main__ script)."""
+    if not node.level:
+        return node.module
+    package = name if path.name == "__init__.py" else name.rpartition(".")[0]
+    try:
+        return importlib.util.resolve_name("." * node.level + (node.module or ""), package)
+    except (ImportError, ValueError):
+        return None
+
+
+def _imports(path: Path, name: str, prefixes: tuple[str, ...]) -> set[str]:
     """First-party module names a source file imports (static parse, no import)."""
     found: set[str] = set()
     for node in ast.walk(ast.parse(path.read_bytes())):
         if isinstance(node, ast.Import):
             found.update(a.name for a in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
-            found.add(node.module)  # `from pkg.mod import name`
-            found.update(f"{node.module}.{a.name}" for a in node.names)  # `from pkg import mod`
+        elif isinstance(node, ast.ImportFrom) and (base := _from_base(node, name, path)):
+            found.add(base)  # `from pkg.mod import name`
+            found.update(f"{base}.{a.name}" for a in node.names)  # `from pkg import mod`
     host_roots = {p[:-1] for p in prefixes[len(FIRST_PARTY):]}  # `import hostpkg` itself
     return {m for m in found if m.startswith(prefixes) or m in host_roots}
 
@@ -87,7 +100,7 @@ def _closure(found: dict[str, Path], queue: list[str], prefixes: tuple[str, ...]
         if path is None or not path.exists():
             continue  # a symbol, not a module
         found[name] = path
-        queue.extend(_imports(path, prefixes) - found.keys())
+        queue.extend(_imports(path, name, prefixes) - found.keys())
     return found
 
 
@@ -102,7 +115,7 @@ def code_modules(step: Any, config: Any = None) -> dict[str, Path]:
     own = type(step).__module__
     prefixes = _first_party(own)
     found = {own: Path(inspect.getfile(type(step)))}
-    queue = list(_imports(found[own], prefixes))
+    queue = list(_imports(found[own], own, prefixes))
     queue += step.code_deps(config_subtree(config, step.name))
     return _closure(found, queue, prefixes)
 

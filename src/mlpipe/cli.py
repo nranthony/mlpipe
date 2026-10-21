@@ -52,10 +52,17 @@ def run(
 
 def _load(pipeline: str, config: Path | None) -> tuple[list, dict, PipelineConfig]:
     """Steps, raw config, and the validated top-level keys (tracker, tune, ...)."""
-    module = pipeline_module(pipeline)
+    module = _module(pipeline)
     cfg = yaml.safe_load(config.read_text()) if config else getattr(module, "DEFAULT_CONFIG", {})
     steps = module.build_steps()
     return steps, cfg, validate_config(cfg, [s.name for s in steps])
+
+
+def _module(pipeline: str):
+    try:
+        return pipeline_module(pipeline)
+    except KeyError as exc:  # a usage error, not a traceback
+        raise typer.BadParameter(exc.args[0], param_hint="--pipeline") from None
 
 
 def _make_tracker(top: PipelineConfig):
@@ -213,7 +220,7 @@ def predict(
 
     from mlpipe.core.manifest import ManifestLog
 
-    module = pipeline_module(pipeline)
+    module = _module(pipeline)
     log, store = ManifestLog(_log_dir(pipeline, manifests_dir)), LocalCasStore(store_dir)
     if bundle:
         bundle_hash = _resolve_bundle(log, bundle)

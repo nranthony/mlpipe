@@ -174,12 +174,6 @@ class SlopeBackend:
 
     def predict(self, X):
         return X.to_numpy()[:, 0] * self.w
-
-    def save(self, path):
-        path.write_text(str(self.w))
-
-    def load(self, path):
-        self.w = float(path.read_text())
 ''',
     "hostpkg/pipeline.py": '''\
 from hostpkg.steps import MakeTable
@@ -233,6 +227,10 @@ def test_work0006_host_pipeline_and_backend_found_by_entry_point(host_site, tmp_
 def test_work0006_unknown_names_are_rejected():
     with pytest.raises(KeyError, match="unknown pipeline 'nope'"):
         pipeline_module("nope")
+    for verb in (["run"], ["tune"], ["predict"]):  # the CLI reports it as a usage error
+        result = CliRunner().invoke(app, [*verb, "--pipeline", "nope"])
+        assert result.exit_code == 2  # typer's usage-error code; a traceback exits 1
+        assert "unknown pipeline 'nope'" in result.output
     with pytest.raises(ValueError, match="unknown model kind 'nope'"):
         TrainConfig.model_validate({"model": {"kind": "nope"}})
 
@@ -252,6 +250,20 @@ def test_work0006_host_helper_edit_changes_the_step_signature(host_site):
     assert not any(m.startswith("mlpipe.core") for m in mods)  # core never is
     before = code_hash(MakeTable())
     (host_site / "hostpkg/helpers.py").write_text("def scale(x):\n    return x * 3.0\n")
+    assert code_hash(MakeTable()) != before
+
+
+def test_work0006_relative_imports_are_in_the_closure(host_site):
+    (host_site / "hostpkg/extra.py").write_text("K = 1\n")
+    (host_site / "hostpkg/rel_steps.py").write_text(
+        (host_site / "hostpkg/steps.py").read_text()
+        .replace("from hostpkg.helpers import scale", "from . import extra\nfrom .helpers import scale")
+    )
+    from hostpkg.rel_steps import MakeTable
+
+    assert {"hostpkg.helpers", "hostpkg.extra"} <= set(code_modules(MakeTable()))
+    before = code_hash(MakeTable())
+    (host_site / "hostpkg/extra.py").write_text("K = 2\n")
     assert code_hash(MakeTable()) != before
 
 

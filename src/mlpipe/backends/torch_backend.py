@@ -1,17 +1,15 @@
 """TorchMLPBackend — the port proof (DESIGN.md block 8, cycle 8).
 
 Tensors, DataLoaders, and device placement live ENTIRELY inside this adapter;
-the port surface is polars/numpy/Path only. Centralized VRAM guard:
+the port surface is polars/numpy only. Centralized VRAM guard:
 any config whose estimated footprint exceeds the budget fails before training.
 """
 
 from __future__ import annotations
 
 import itertools
-from pathlib import Path
 from typing import Any
 
-import joblib
 import numpy as np
 import polars as pl
 
@@ -98,10 +96,3 @@ class TorchMLPBackend:
                 outs.append(model(features[start : start + 65536].to(device).float()).cpu())
         self._model = model.cpu()
         return torch.cat(outs).squeeze(1).numpy()
-
-    def save(self, path: Path) -> None:
-        joblib.dump({"model": self._model, "params": self._params}, path)
-
-    def load(self, path: Path) -> None:
-        state = joblib.load(path)
-        self._model, self._params = state["model"], state["params"]

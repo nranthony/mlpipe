@@ -53,7 +53,8 @@ step, input artifact hashes). Code version = hash of the step's source file **cl
 its own module, every module under `mlpipe.steps.*` / `mlpipe.backends.*` — and, for a
 host step, under the host's own top-level package — reachable from it by import, and
 any module it resolves lazily and declares via `Step.code_deps` (the model backend for
-the configured `kind`). Code that runs from inside an artifact is a separate case: a
+the configured `kind`). Relative imports resolve against the importing module's
+package, so they count the same as absolute ones. Code that runs from inside an artifact is a separate case: a
 pickled model names its class, not its source, so `train` stores
 `module_code_hash(backend)` in the model artifact. A predict-only backend edit then
 moves the model's bytes, and every consumer that calls `predict` re-runs. The closure is found by `find_spec` + `ast`
@@ -113,10 +114,12 @@ for the authoritative signatures. Summary:
 - `ArtifactStore` (port): `save`, `load`, `exists`. Impl: `LocalCasStore`.
 - `Tracker` (port): `start_run(manifest)`, `log_metrics`, `register_model`.
   Impl: `MlflowTracker`. Must be a thin view — no logic lives here.
-- `ModelBackend` (port): `fit(X, y, params)`, `predict(X)`, `save(path)`.
-  Impls: `LightGBMBackend`, `TorchMLPBackend`. The train step owns the fold loop, so
-  backends never see a `FoldPlan`. Signatures may only mention *our* types
-  (polars.DataFrame, numpy, Path).
+- `ModelBackend` (port): `fit(X, y, params)`, `predict(X)`.
+  Impls: `LightGBMBackend`, `LightGBMBinaryBackend`, `TorchMLPBackend`. The train step
+  owns the fold loop, so backends never see a `FoldPlan`, and it persists the fitted
+  backend object itself (joblib, via the store), so an adapter must be picklable and
+  has no save/load. Signatures may only mention *our* types (polars.DataFrame, numpy,
+  Path).
 - `FoldPlan` (data type, kept in core): `folds`, `plan_hash`, `group_column`, `meta`.
   It is the contract between the CV, train and evaluate steps, and the carrier of the
   plan-hash comparability rule, which is generic to any CV pipeline. If `torch.Tensor` appears in the
@@ -147,7 +150,8 @@ protocol. Plotting/metrics hide behind plain functions, not classes.
   Without `--input` the pipeline's optional `serve_input(log, store)` hook supplies
   the frame (Numerai: the latest live snapshot). An optional `prepare(frame, bundle)`
   hook returns `(features, ids)` (Numerai: the cleaner fill, `numerai_ticker` + `era`).
-  The default selects the bundle's features and its `id_columns`. Output: ids + `prediction`.
+  The default selects the bundle's features and its `id_columns` (set by
+  `register.id_columns`). Output: ids + `prediction`.
 - **Read path:** manifests (grep-able JSON), MLflow UI + MLflow MCP server for run
   comparison. Optional: generate plotly HTML comparisons from the tracking API.
 - Config typos must die at pydantic validation, not at hour six of training.
