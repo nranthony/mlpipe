@@ -14,6 +14,7 @@ from mlpipe.plugins import BACKENDS, registered
 
 REGISTRY = {
     "lightgbm": "mlpipe.backends.lightgbm_backend:LightGBMBackend",
+    "lightgbm_binary": "mlpipe.backends.lightgbm_backend:LightGBMBinaryBackend",
     "torch_mlp": "mlpipe.backends.torch_backend:TorchMLPBackend",
 }
 

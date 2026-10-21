@@ -45,3 +45,22 @@ class LightGBMBackend:
 
     def load(self, path: Path) -> None:
         self._model = joblib.load(path)
+
+
+class LightGBMBinaryBackend(LightGBMBackend):
+    """Binary classifier. `predict` returns P(y == 1), so the port stays one
+    np.ndarray per row and probability metrics (log-loss, Brier) are valid."""
+
+    def fit(
+        self,
+        X: pl.DataFrame,
+        y: np.ndarray,
+        params: dict[str, Any],
+    ) -> None:
+        from lightgbm import LGBMClassifier
+
+        self._model = LGBMClassifier(**{**DEFAULTS, "objective": "binary", **params})
+        self._model.fit(X.to_numpy().astype(np.float32), y)
+
+    def predict(self, X: pl.DataFrame) -> np.ndarray:
+        return self._model.predict_proba(X.to_numpy().astype(np.float32))[:, 1]

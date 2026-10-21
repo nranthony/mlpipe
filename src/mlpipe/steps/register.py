@@ -14,7 +14,7 @@ from mlpipe.core.interfaces import Step, StepResult
 
 
 class RegisterConfig(BaseModel):
-    model_name: str = "numerai-model"
+    model_name: str = "model"
 
 
 class RegisterStep(Step):
@@ -32,6 +32,7 @@ class RegisterStep(Step):
             if c.startswith("feature_")
         ]
         report = ctx.get("eval_report")
+        clean = ctx.config.get("clean", {})
 
         bundle = {
             "model_name": cfg.model_name,
@@ -41,10 +42,11 @@ class RegisterStep(Step):
             "plan_hash": report["plan_hash"],
             "target": report["target"],
             "metrics": report["metrics"],
-            "cleaner": ctx.config.get("clean", {}).get("cleaner", {}),
-            "era_column": ctx.config.get("clean", {}).get("era_column", "era"),  # raw name
+            "cleaner": clean.get("cleaner", {}),
             "model_config": ctx.config.get("train", {}).get("model", {}),
         }
+        if "era_column" in clean:  # raw source name, for era-keyed serving (Numerai)
+            bundle["era_column"] = clean["era_column"]
         art = ctx.put(bundle, "model_bundle", ext="json")
         ctx.log_meta("bundle", {"name": cfg.model_name, "plan_hash": report["plan_hash"]})
         return StepResult(outputs={"model_bundle": art})

@@ -91,9 +91,9 @@ the pinned bundle. The next iteration cycle builds on the pinned baseline.
 | 2 | Validate | raw tables → `validated_*` (zero-copy aliases) + `validation_report` | pandera schemas: columns, the configured era column, feature dtypes against an allow-list, per-dtype null bounds, era monotonicity, row counts vs previous snapshot. Hard gate — fail loud. |
 | 3 | Clean & transform | validated → `clean_table` + `clean_validation` | Stateless only. Renames the source's era column to the canonical `era` (v6.0: `date`) and drops `exclude_features`, so nothing downstream knows source names. Same input ⇒ same output. Polars exprs; validation cleaned with the same exprs so downstream skew checks have a target. |
 | 4 | Feature engineering | clean → `feature_table` + `feature_validation` + `fitted_transformer` | Fitted transforms learn from train only and are **unsupervised**: `fit` sees the feature matrix, never the target. A target-aware transform (target encoding, supervised selection) fitted here would leak across CV folds, so it fits per fold inside the ModelBackend instead. The transformer is a versioned artifact that travels with the model; `feature_validation` is what the skew guard compares against. |
-| 5 | Split / CV plan | feature table + cv config → `fold_plan` | Era-aware, purged, embargoed. The plan is an artifact with its own hash; model comparisons must cite the same plan hash. The `FoldPlan` type is domain-free (`folds`, `plan_hash`, `group_column`, `meta`): era, purge and embargo are this step's semantics and travel in `meta`. |
+| 5 | Split / CV plan | feature table + cv config → `fold_plan` | Era-aware, purged, embargoed. The plan is an artifact with its own hash; model comparisons must cite the same plan hash. The `FoldPlan` type is domain-free (`folds`, `plan_hash`, `group_column`, `meta`): era, purge and embargo are this step's semantics and travel in `meta`. Generic alternative for the same slot: `GroupKFoldStep` (`steps/groupcv.py`; a group never straddles a split; no group column = shuffled row k-fold). |
 | 6 | Train & tune | features + fold_plan + model config → `model`, `oof_preds` | Via ModelBackend port. `model` is a `{full, fold_models}` bundle so stored state alone reproduces OOF (5x size, no retraining needed for audit). Optuna via `mlpipe tune`. |
-| 7 | Evaluate | model + oof_preds + fold_plan + feature_validation → `eval_report` + `eval_chart` (metrics JSON + standalone plotly HTML) | Era-wise corr, sharpe, drawdown, feature exposure — for OOF (`mean_corr`, …) and for the full model on the validation holdout (`val_mean_corr`, …), side by side. Eras with unresolved targets are skipped. Log metrics to MLflow. |
+| 7 | Evaluate | model + oof_preds + fold_plan + feature_validation → `eval_report` + `eval_chart` (metrics JSON + standalone plotly HTML) | Era-wise corr, sharpe, drawdown, feature exposure — for OOF (`mean_corr`, …) and for the full model on the validation holdout (`val_mean_corr`, …), side by side. Eras with unresolved targets are skipped. Log metrics to MLflow. Generic alternative for the same slot: `TabularEvalStep` (`task: regression` → rmse, mae, r2, corr; `task: binary` → roc_auc, pr_auc, log_loss, brier, accuracy, which need probabilities, so use a classifier backend such as `lightgbm_binary` whose `predict` returns P(y=1)). |
 | 8 | Register & package | model + transformer + eval → `model_bundle` | The bundle holds model + fitted transformer + feature list + cleaner recipe + plan hash. Registry versions are created only by `mlpipe promote` (ADR-0006). |
 
 The stateless/stateful boundary between blocks 3 and 4 is deliberate: block 3 caches on
@@ -183,7 +183,8 @@ appear after the host package is (re)installed. Before the first tag:
 - the core is domain-neutral: no era concepts in ports, and the import boundary is
   test-enforced;
 - the Numerai pipeline lives in `examples/numerai/`;
-- a second, non-Numerai smoke pipeline passes.
+- a second, non-Numerai smoke pipeline passes (done: `tests/test_work0006_second_domain.py`,
+  grouped customer data, regression and binary).
 
 A Copier template, if built, carries **scaffolding only**: agent docs, ADR and `work/`
 conventions, a config skeleton and CLI wiring. It is built only after a host repo has

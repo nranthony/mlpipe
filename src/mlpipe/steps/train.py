@@ -36,7 +36,7 @@ class TrainConfig(BaseModel):
     target: str = "target"
 
 
-def era_corr(pred: np.ndarray, y: np.ndarray) -> float:
+def pearson(pred: np.ndarray, y: np.ndarray) -> float:
     return float(np.corrcoef(pred, y)[0, 1])
 
 
@@ -67,7 +67,7 @@ class TrainStep(Step):
             backend.fit(X[tr], y[tr], cfg.model.params)
             oof[va] = backend.predict(X[va])
             fold_backends.append(backend)
-            ctx.log_metric(f"fold{i}_corr", era_corr(oof[va], y[va]))
+            ctx.log_metric(f"fold{i}_corr", pearson(oof[va], y[va]))
 
         full = backend_cls()
         full.fit(X, y, cfg.model.params)
@@ -82,8 +82,14 @@ class TrainStep(Step):
                 {"full": full, "fold_models": fold_backends, "backend_code": code},
                 "model", ext="joblib",
             ),
+            # the plan's group column (Numerai: era) travels with the OOF rows, if any
             "oof_preds": ctx.put(
-                pl.DataFrame({"era": df["era"], "prediction": oof, cfg.target: y}), "oof_preds"
+                pl.DataFrame([
+                    *([df[plan.group_column]] if plan.group_column else []),
+                    pl.Series("prediction", oof),
+                    pl.Series(cfg.target, y),
+                ]),
+                "oof_preds",
             ),
         }
         ctx.log_meta("plan_hash", plan.plan_hash)

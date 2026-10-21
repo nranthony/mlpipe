@@ -3,7 +3,7 @@
 **Current state (update in place; the log below is append-only):**
 - Build cycles 0–10: code complete since 2026-08-20.
 - Active work: work/0006 plan ([plan.md](../work/0006-core-library-extraction/plan.md)).
-  Phase 1 (steps 1–7b) done; phase 2 steps 8–11 done; next is step 12.
+  Phase 1 (steps 1–7b) done; phase 2 (steps 8–12) done; next is step 13 (phase 3).
 - Data: Numerai **v6.0** (v5.x training files are no longer served). Raw files are in
   `/workspace/raw_data/numerai/v6.0` (downloaded host-side 2026-10-20).
 - Real data: **smoke-proven only** (2026-10-20): the whole chain on 100 eras, cache-hit
@@ -246,3 +246,34 @@ Log:
   - 105 tests green, ruff clean. Orchestration modules: 586 lines, up 29 for the
     closure refactor plus `module_code_hash`, which needs core's module-finding to
     hash an artifact's code. Still under the ~600 signal.
+- 2026-10-21: work/0006 step 12, a second, non-Numerai domain (0007 D4). Phase 2 is done.
+  - New generic steps, each filling an existing slot:
+    - `GroupKFoldStep` (`steps/groupcv.py`, slot `cvplan`): a group never straddles
+      a split; with no group column it is shuffled row k-fold. The plan hash covers
+      (groups, config).
+    - `TabularEvalStep` (`steps/tabular_eval.py`, slot `evaluate`), with OOF and
+      `val_*` side by side:
+      - `task: regression` → rmse, mae, r2, corr;
+      - `task: binary` → roc_auc, pr_auc, log_loss, brier, accuracy.
+    - The metric functions are in `steps/tabular_metrics.py` (sklearn, already in the
+      `ml` extra). Binary metrics reject non-probability scores.
+    - Backend `lightgbm_binary`: its `predict` returns P(y=1), so the port is
+      unchanged. Multiclass is out of scope for v0.1.0.
+  - Shared steps made domain-free:
+    - train writes the plan's `group_column` into `oof_preds`, where it used to
+      hard-code `era`;
+    - the fold metric helper `era_corr` is renamed `pearson`;
+    - register's default `model_name` is `model`, and `era_column` enters the bundle
+      only when the clean config sets it.
+  - `tests/test_work0006_second_domain.py`: synthetic customers (6 rows each, 120
+    train / 40 validation, per-customer effect) through make → features (shared) →
+    group k-fold → train (shared) → tabular evaluate → register (shared). No `era`
+    column anywhere; the rerun is all cached.
+    - regression: `val_r2` 0.91, OOF `r2` 0.87;
+    - binary: `val_roc_auc` 0.95, `val_log_loss` 0.30, OOF `roc_auc` 0.94.
+  - Numerai regression check (v6.0 smoke): ingest→cvplan cached; train onward re-ran,
+    because the backend module and train code changed.
+    - OOF predictions `33167a49` and eval report `f48e7200` are byte-identical;
+      plan `7c4df3df`.
+    - New bundle `cbf55165`.
+  - 111 tests green, ruff clean. Orchestration modules unchanged at 586 lines.

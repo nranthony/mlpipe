@@ -36,7 +36,7 @@
 | 9 | `FoldPlan.era_column` → `group_column` + `meta` (defaulted fields last); era/purge/embargo semantics into the CV step. DESIGN.md block 4 rule: FeatureStep fits are unsupervised, target-aware transforms fit per fold inside the backend (0007 D1, D2) | **done** 2026-10-20; plan hash unchanged (`7c4df3df` on v6.0) |
 | 10 | Declare the full `RunContext` surface in `interfaces.py`; test that steps use nothing else; drop dead `ModelBackend.fit(folds)` | **done** 2026-10-21; `FoldPlan` stays in core (decision 2026-10-21) |
 | 11 | Entry-point discovery: `mlpipe.pipelines`, `mlpipe.backends` (stdlib `importlib.metadata`). **Same step:** the signature closure treats the step's root package as first-party (plus `mlpipe.steps.`/`mlpipe.backends.`, never `mlpipe.core.`), with a test that a host-helper edit changes the signature (0007 M1). **Also:** steps that call a model's `predict` (evaluate, register, and the predict path) must carry the backend module in their closure; today only train declares it (found at step 10) | **done** 2026-10-21; the backend fix is `backend_code` in the model artifact |
-| 12 | Second-domain smoke pipeline (plain tabular, group k-fold) in tests, with generic regression/classification metrics (0007 D4) | todo |
+| 12 | Second-domain smoke pipeline (plain tabular, group k-fold) in tests, with generic regression/classification metrics (0007 D4) | **done** 2026-10-21; binary only, multiclass out of scope for v0.1.0 |
 
 ## Phase 3 — package and adopt
 
