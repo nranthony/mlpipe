@@ -214,3 +214,6 @@ Log:
     would re-run train with identical bytes and leave evaluate stale. Folded into
     step 11.
   - 100 tests green, ruff clean. The orchestration modules are unchanged at 557 lines.
+- 2026-10-21: the bootstrap twin `mlpipe-claude-init-package/` was deleted by the human
+  (work/0004 G, plan step 7). This commit records the deletion and drops its ruff
+  exclude.
