@@ -195,3 +195,11 @@ def test_cycle9_tune_runs_resume_and_never_promotes(env):
     runs = mlflow.search_runs(experiment_names=["toy"])
     tags = [t for t in runs["params.tag"].dropna() if t.startswith("toy-study-trial")]
     assert len(tags) >= 4  # every trial appears in MLflow, tagged study+trial
+
+
+def test_work0006_lineage_resolves_a_prefix_and_rejects_unknown_hashes(env):
+    tmp, _, _ = env
+    lineage_dirs = ["--manifests-dir", str(tmp / "manifests"), "--pipeline", "numerai"]
+    result = runner.invoke(app, ["lineage", bundle_hash_of(tmp)[:8], *lineage_dirs])
+    assert result.exit_code == 0 and result.output.splitlines()[0].startswith("register")
+    assert runner.invoke(app, ["lineage", "ffffffff", *lineage_dirs]).exit_code != 0

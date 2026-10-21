@@ -254,7 +254,12 @@ def lineage(
 ) -> None:
     from mlpipe.core.manifest import ManifestLog
 
-    for m in ManifestLog(_log_dir(pipeline, manifests_dir)).lineage(content_hash):
+    log = ManifestLog(_log_dir(pipeline, manifests_dir))
+    produced = {h for m in log.entries() for h in m["outputs"].values()}
+    found = [h for h in produced if h.startswith(content_hash)]
+    if len(found) != 1:  # an unknown hash must not print an empty, "successful" lineage
+        raise typer.BadParameter(f"{content_hash!r} matches {len(found)} artifacts in the manifests")
+    for m in log.lineage(found[0]):
         typer.echo(f"{m['step']:<20} sig={m['signature'][:8]} "
                    f"commit={(m['git_commit'] or '?')[:8]} inputs={list(m['inputs'])}")
 

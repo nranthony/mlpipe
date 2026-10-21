@@ -3,7 +3,8 @@
 **Current state (update in place; the log below is append-only):**
 - Build cycles 0–10: code complete since 2026-08-20.
 - Active work: work/0006 plan ([plan.md](../work/0006-core-library-extraction/plan.md)).
-  Phase 1 (steps 1–7b) done; phase 2 (steps 8–12) done; next is step 13 (phase 3).
+  Phase 1 (steps 1–7b) done; phase 2 (steps 8–12) done; step 13 done bar the human
+  version bump + `v0.1.0` tag. Next: step 14 (numerai adoption) or 16 (`gc --dry-run`).
 - Data: Numerai **v6.0** (v5.x training files are no longer served). Raw files are in
   `/workspace/raw_data/numerai/v6.0` (downloaded host-side 2026-10-20).
 - Real data: **smoke-proven only** (2026-10-20): the whole chain on 100 eras, cache-hit
@@ -277,3 +278,46 @@ Log:
       plan `7c4df3df`.
     - New bundle `cbf55165`.
   - 111 tests green, ruff clean. Orchestration modules unchanged at 586 lines.
+- 2026-10-21: work/0006 step 13, Numerai moves into `mlpipe.examples.numerai` and the CLI
+  goes domain-free (0007 A2, A3 promote half), plus the full v6.0 run.
+  - Layout (decision 2026-10-21, option 1): ingest, validate, clean, evaluate,
+    eval_metrics and the pipeline (`pipeline.py`) moved via `git mv` into
+    `mlpipe.examples.numerai`. It stays a builtin pipeline, so no reinstall is needed.
+    - This refines ADR-0005's `examples/numerai/` wording, which pictured a separate
+      directory.
+    - `mlpipe.examples.` joined the first-party signature prefixes, so imports between
+      example modules stay in the closure.
+  - CLI:
+    - `--pipeline` is required on every verb.
+    - `predict` takes `--input <parquet>`, or the pipeline's `serve_input(log, store)`
+      hook. An optional `prepare(frame, bundle)` hook returns `(features, ids)`;
+      Numerai's does the cleaner fill and keys rows by `numerai_ticker` + `era`.
+    - `promote` takes bundles without `plan_hash`/`target`.
+    - `lineage` resolves a hash prefix and rejects unknown hashes, where before it
+      printed an empty "success".
+  - New tests: `cli.py` names no Numerai artifact; nothing outside `mlpipe.examples`
+    imports it; example steps use only the `RunContext` surface; promote without a
+    plan; `--pipeline` required; predict `--input` with ticker; the lineage prefix.
+  - Smoke after the move: the moved steps re-ran under their new module names, but
+    with byte-identical outputs, so features, cvplan, train and register were cache
+    hits (bundle `cbf55165` unchanged). `predict` output is `numerai_ticker`, `era`,
+    `prediction`: 7,154 unique tickers, none null.
+  - **Full v6.0 run** (`--tag full-v6`, default config):
+    - Data: 835 train eras, medium feature set (350 Int8; `feature_country`
+      excluded), LightGBM with 200 trees.
+    - Run time: 26 min ingest→register (ingest/validate cached), well under the ~2 h
+      estimate.
+    - Fold plan `8b0a1167` (4 folds, purge/embargo 4). Bundle `f7cc4688`.
+    - OOF: `mean_corr` 0.0316, sharpe 2.00, max drawdown 0.090, feature exposure 0.255.
+    - Holdout (394 resolved validation eras, 2019→2026): `val_mean_corr` 0.0216,
+      sharpe 1.24, max drawdown 0.291, exposure 0.302.
+    - Not comparable with any v5.2 number (`baselines.yaml` still holds the pre-ADR-0006
+      v5.2 tune pin) or with the smoke plan `7c4df3df`.
+  - Rerun: all 8 steps cached. `lineage` walks register→ingest; `predict` served
+    7,154 rows. Store 5.0 GB.
+  - **Not promoted.** Promotion is a human or agent decision via `mlpipe promote f7cc4688`
+    (ADR-0006).
+  - 118 tests green, ruff clean.
+  - Human steps left for v0.1.0: bump `version` to 0.1.0 in `pyproject.toml` and run
+    `uv lock` host-side (`uv lock` is denied in the sandbox), commit, `git tag v0.1.0`,
+    push with tags.
