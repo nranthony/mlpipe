@@ -80,7 +80,6 @@ class ModelBackend(Protocol):
         X: pl.DataFrame,
         y: np.ndarray,
         params: dict[str, Any],
-        folds: FoldPlan | None = None,
     ) -> None: ...
     def predict(self, X: pl.DataFrame) -> np.ndarray: ...
     def save(self, path: Path) -> None: ...
@@ -90,22 +89,51 @@ class ModelBackend(Protocol):
 # --------------------------------------------------------------------------- core
 
 
-class RunContext:
-    """The only door a Step has to the outside world. Cycle 0 implements."""
+class RunContext(ABC):
+    """The only door a Step has to the outside world. This class declares the
+    whole step-facing surface: `config` plus the methods below. Steps may use
+    nothing else (tests/test_work0006_phase2.py enforces it); the pipeline's
+    bookkeeping lives on the implementation in `mlpipe.core.context`."""
 
     def __init__(self, config: Any, store: ArtifactStore, tracker: Tracker) -> None:
-        self.config = config
+        self.config = config  # the full, validated config; steps read their own subtree
         self._store = store
         self._tracker = tracker
 
+    # inputs
+    @abstractmethod
     def get(self, key: str) -> Any:
-        raise NotImplementedError("cycle 0")
+        """Load an input artifact into memory."""
 
+    @abstractmethod
+    def get_lazy(self, key: str) -> pl.LazyFrame:
+        """Scan a parquet input without materializing it."""
+
+    @abstractmethod
+    def input_hashes(self, keys: list[str]) -> dict[str, str]:
+        """Content hashes of available artifacts, by key."""
+
+    @abstractmethod
+    def previous(self, step_name: str) -> dict[str, Any] | None:
+        """Latest completed manifest for a step, or None on the first run."""
+
+    # outputs
+    @abstractmethod
     def put(self, obj: Any, key: str, *, ext: str = "parquet") -> Artifact:
-        raise NotImplementedError("cycle 0")
+        """Persist an output artifact in the store."""
 
+    @abstractmethod
+    def put_alias(self, key: str, source_key: str) -> Artifact:
+        """Re-emit an input under a new key, with no new bytes."""
+
+    # records
+    @abstractmethod
     def log_metric(self, name: str, value: float) -> None:
-        raise NotImplementedError("cycle 0")
+        """Numeric metric: into the manifest and to the tracker."""
+
+    @abstractmethod
+    def log_meta(self, key: str, value: Any) -> None:
+        """Non-numeric fact for the manifest."""
 
 
 class Step(ABC):

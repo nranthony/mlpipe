@@ -69,7 +69,7 @@ class TrainStep(Step):
             ctx.log_metric(f"fold{i}_corr", era_corr(oof[va], y[va]))
 
         full = backend_cls()
-        full.fit(X, y, cfg.model.params, plan)
+        full.fit(X, y, cfg.model.params)
 
         outs = {
             "model": ctx.put({"full": full, "fold_models": fold_backends}, "model", ext="joblib"),

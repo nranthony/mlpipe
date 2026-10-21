@@ -3,7 +3,7 @@
 **Current state (update in place; the log below is append-only):**
 - Build cycles 0–10: code complete since 2026-08-20.
 - Active work: work/0006 plan ([plan.md](../work/0006-core-library-extraction/plan.md)).
-  Phase 1 (steps 1–7b) done; phase 2 steps 8–9 done; next is step 10.
+  Phase 1 (steps 1–7b) done; phase 2 steps 8–10 done; next is step 11.
 - Data: Numerai **v6.0** (v5.x training files are no longer served). Raw files are in
   `/workspace/raw_data/numerai/v6.0` (downloaded host-side 2026-10-20).
 - Real data: **smoke-proven only** (2026-10-20): the whole chain on 100 eras, cache-hit
@@ -195,3 +195,22 @@ Log:
     training data is retired, `target_ender_20` is gone, and the frozen holdout's era
     ids don't exist in v6.0.
   - 96 tests green, ruff clean.
+- 2026-10-21: work/0006 step 10, the declared `RunContext` surface (0004 E).
+  - `interfaces.RunContext` is now an ABC that declares the whole step-facing
+    surface: `config`; `get`, `get_lazy`, `input_hashes`, `previous`; `put`,
+    `put_alias`; `log_metric`, `log_meta`. The pipeline bookkeeping (`registry`,
+    `reset_step`, `step_*`, `manifest_log`) stays on the core implementation.
+  - An AST test fails any `ctx.<attr>` in `mlpipe/steps/` outside that surface,
+    including `getattr(ctx, …)`. A self-test proves the check catches `ctx._store`.
+  - Dropped the dead `folds` argument from `ModelBackend.fit` and both backends. The
+    train step owns the fold loop.
+  - `FoldPlan` stays in core (decision 2026-10-21). It is the CV→train→evaluate
+    contract and carries the plan-hash rule, which is generic to any CV pipeline.
+  - Real-data rerun (v6.0 smoke): only train re-ran, since its backend code changed.
+    It produced the byte-identical model `3bc9b4c2`, so evaluate and register were
+    served from cache by content.
+  - **Gap found:** evaluate calls the model's `predict`, but its signature doesn't
+    include the backend module; only train declares it. A predict-only backend change
+    would re-run train with identical bytes and leave evaluate stale. Folded into
+    step 11.
+  - 100 tests green, ruff clean. The orchestration modules are unchanged at 557 lines.

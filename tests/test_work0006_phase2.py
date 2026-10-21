@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+import ast
+import inspect
+from pathlib import Path
+
 import numpy as np
 import polars as pl
 from sklearn.preprocessing import StandardScaler
 
 import mlpipe.steps.features as features_mod
+from mlpipe.backends.lightgbm_backend import LightGBMBackend
+from mlpipe.backends.torch_backend import TorchMLPBackend
+from mlpipe.core import context, interfaces
 from mlpipe.core.interfaces import FoldPlan
 from mlpipe.core.pipeline import Pipeline
 from mlpipe.core.store import LocalCasStore
@@ -63,3 +70,55 @@ def test_work0006_feature_fits_never_see_the_target(tmp_path, monkeypatch):
              store.save(train, "clean_validation", ext="parquet")]
     Pipeline([FeatureStep()], store, tmp_path / "m", {}).run(seeds=seeds)
     assert SpyScaler.calls == [((40, 2), None)]
+
+
+# --------------------------------------------------------------------------- step 10
+
+STEPS_DIR = Path(features_mod.__file__).parent
+
+
+def declared_surface() -> set[str]:
+    return {"config"} | set(interfaces.RunContext.__abstractmethods__)
+
+
+def ctx_uses(path: Path) -> list[tuple[int, str]]:
+    """Every `ctx.<attr>` (and `getattr(ctx, ...)`) in a module."""
+    uses = []
+    for node in ast.walk(ast.parse(path.read_text())):
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "ctx":
+            uses.append((node.lineno, node.attr))
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id in {"getattr", "setattr", "vars"}
+                and node.args and isinstance(node.args[0], ast.Name) and node.args[0].id == "ctx"):
+            uses.append((node.lineno, f"{node.func.id}()"))
+    return uses
+
+
+def test_work0006_steps_use_only_the_declared_run_context_surface():
+    surface = declared_surface()
+    stray = [
+        f"{p.name}:{line} ctx.{attr}"
+        for p in sorted(STEPS_DIR.glob("*.py"))
+        for line, attr in ctx_uses(p)
+        if attr not in surface
+    ]
+    assert not stray, f"steps reach past the RunContext port: {stray}"
+
+
+def test_work0006_run_context_surface_is_declared_and_implemented():
+    assert declared_surface() == {
+        "config", "get", "get_lazy", "input_hashes", "previous",
+        "put", "put_alias", "log_metric", "log_meta",
+    }
+    assert not context.RunContext.__abstractmethods__  # the implementation is complete
+
+
+def test_work0006_model_backend_fit_takes_no_fold_plan():
+    for cls in (interfaces.ModelBackend, LightGBMBackend, TorchMLPBackend):
+        assert list(inspect.signature(cls.fit).parameters) == ["self", "X", "y", "params"]
+
+
+def test_work0006_surface_check_catches_a_bypass(tmp_path):
+    bad = tmp_path / "bad_step.py"
+    bad.write_text("def run(ctx):\n    ctx._store.load('h')\n    getattr(ctx, 'registry')\n")
+    assert sorted(ctx_uses(bad)) == [(2, "_store"), (3, "getattr()")]

@@ -1,7 +1,7 @@
 """TorchMLPBackend — the port proof (DESIGN.md block 8, cycle 8).
 
 Tensors, DataLoaders, and device placement live ENTIRELY inside this adapter;
-the port surface is polars/numpy/Path/FoldPlan only. Centralized VRAM guard:
+the port surface is polars/numpy/Path only. Centralized VRAM guard:
 any config whose estimated footprint exceeds the budget fails before training.
 """
 
@@ -14,8 +14,6 @@ from typing import Any
 import joblib
 import numpy as np
 import polars as pl
-
-from mlpipe.core.interfaces import FoldPlan
 
 DEFAULTS = {
     "hidden": [256, 128],
@@ -56,7 +54,6 @@ class TorchMLPBackend:
         X: pl.DataFrame,
         y: np.ndarray,
         params: dict[str, Any],
-        folds: FoldPlan | None = None,
     ) -> None:
         import torch
 

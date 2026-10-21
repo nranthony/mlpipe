@@ -1,7 +1,7 @@
 """LightGBM adapter for the ModelBackend port (DESIGN.md §3).
 
 The only module (besides tests) allowed to import lightgbm. Port signatures
-mention only our types: polars, numpy, Path, FoldPlan.
+mention only our types: polars, numpy, Path.
 """
 
 from __future__ import annotations
@@ -12,8 +12,6 @@ from typing import Any
 import joblib
 import numpy as np
 import polars as pl
-
-from mlpipe.core.interfaces import FoldPlan
 
 DEFAULTS = {
     "objective": "regression",
@@ -33,7 +31,6 @@ class LightGBMBackend:
         X: pl.DataFrame,
         y: np.ndarray,
         params: dict[str, Any],
-        folds: FoldPlan | None = None,
     ) -> None:
         from lightgbm import LGBMRegressor
 

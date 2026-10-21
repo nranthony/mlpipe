@@ -101,14 +101,20 @@ for the authoritative signatures. Summary:
 
 - `Step` (ABC): `name`, `inputs`, `outputs`, `signature(ctx) -> str`,
   `run(ctx) -> StepResult`.
-- `RunContext`: `config`, `get(key) -> Artifact`, `put(obj, key) -> Artifact`,
-  `log_metric(name, value)`. The only door steps have to the outside world.
+- `RunContext`: the only door steps have to the outside world. The whole step-facing
+  surface is declared (abstract) in `interfaces.py` and a test holds steps to it:
+  `config`; inputs `get`, `get_lazy`, `input_hashes`, `previous`; outputs `put`,
+  `put_alias`; records `log_metric`, `log_meta`.
 - `ArtifactStore` (port): `save`, `load`, `exists`. Impl: `LocalCasStore`.
 - `Tracker` (port): `start_run(manifest)`, `log_metrics`, `register_model`.
   Impl: `MlflowTracker`. Must be a thin view — no logic lives here.
-- `ModelBackend` (port): `fit(X, y, params, folds)`, `predict(X)`, `save(path)`.
-  Impls: `LightGBMBackend`, later `TorchBackend`. Signatures may only mention *our*
-  types (polars.DataFrame, numpy, Path, FoldPlan). If `torch.Tensor` appears in the
+- `ModelBackend` (port): `fit(X, y, params)`, `predict(X)`, `save(path)`.
+  Impls: `LightGBMBackend`, `TorchMLPBackend`. The train step owns the fold loop, so
+  backends never see a `FoldPlan`. Signatures may only mention *our* types
+  (polars.DataFrame, numpy, Path).
+- `FoldPlan` (data type, kept in core): `folds`, `plan_hash`, `group_column`, `meta`.
+  It is the contract between the CV, train and evaluate steps, and the carrier of the
+  plan-hash comparability rule, which is generic to any CV pipeline. If `torch.Tensor` appears in the
   interface, the port is broken.
 - `Pipeline`: ordered steps, `run(from_step, to_step, overrides)`, `lineage(hash)`.
 
