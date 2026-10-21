@@ -342,3 +342,10 @@ Log:
   - Orchestration modules at 599 lines (signature.py +12 for relative imports); at
     the ~600 signal, justified as a correctness fix with no new concept.
   - 120 tests green, ruff clean.
+- 2026-10-21 — **v0.1.0 released** (human: commit 4827571, tag `v0.1.0`).
+- 2026-10-21 — **Numerai example: purge 4 → 12 eras.** v6.0's `target` is
+  `target_jupiter_60` (verified: corr 1.0000; docs.numer.ai agrees), a 60-business-day
+  horizon overlapping ~12 weekly eras. The purge of 4 was sized for v5.2's 20-day target,
+  so step 13's v6.0 OOF scores (plan `8b0a1167`: mean_corr 0.0316) carry some leakage and
+  are not comparable with the next run's plan. Found while moving the numerai repo to
+  v6.0 (its work/0011, ADR-0007). Config only; 120 tests green.

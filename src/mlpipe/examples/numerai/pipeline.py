@@ -38,7 +38,8 @@ DEFAULT_CONFIG = {
         "exclude_features": ["feature_country"],  # String; encoding it is model work
     },
     "features": {"transformer": {"kind": "passthrough"}},
-    "cvplan": {"n_folds": 4, "purge_eras": 4, "embargo_eras": 4},
+    # `target` is target_jupiter_60 in v6.0: 60 business days overlap 12 weekly eras.
+    "cvplan": {"n_folds": 4, "purge_eras": 12, "embargo_eras": 4},
     "train": {
         "model": {
             "kind": "lightgbm",
