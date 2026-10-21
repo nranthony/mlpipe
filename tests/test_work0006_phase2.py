@@ -4,21 +4,29 @@ from __future__ import annotations
 
 import ast
 import inspect
+import sys
 from pathlib import Path
 
 import numpy as np
 import polars as pl
+import pytest
 from sklearn.preprocessing import StandardScaler
+from typer.testing import CliRunner
 
 import mlpipe.steps.features as features_mod
+from mlpipe.backends import registry
 from mlpipe.backends.lightgbm_backend import LightGBMBackend
 from mlpipe.backends.torch_backend import TorchMLPBackend
+from mlpipe.cli import app
 from mlpipe.core import context, interfaces
 from mlpipe.core.interfaces import FoldPlan
 from mlpipe.core.pipeline import Pipeline
+from mlpipe.core.signature import code_hash, code_modules, module_code_hash
 from mlpipe.core.store import LocalCasStore
+from mlpipe.plugins import pipeline_module
 from mlpipe.steps.cvplan import CVConfig, build_plan
 from mlpipe.steps.features import FeatureStep
+from mlpipe.steps.train import TrainConfig
 
 # --------------------------------------------------------------------------- step 9
 
@@ -122,3 +130,140 @@ def test_work0006_surface_check_catches_a_bypass(tmp_path):
     bad = tmp_path / "bad_step.py"
     bad.write_text("def run(ctx):\n    ctx._store.load('h')\n    getattr(ctx, 'registry')\n")
     assert sorted(ctx_uses(bad)) == [(2, "_store"), (3, "getattr()")]
+
+
+# --------------------------------------------------------------------------- step 11
+
+HOST_FILES = {
+    "hostpkg/__init__.py": "",
+    "hostpkg/helpers.py": "def scale(x):\n    return x * 2.0\n",
+    "hostpkg/steps.py": '''\
+import numpy as np
+import polars as pl
+
+from hostpkg.helpers import scale
+from mlpipe.core.interfaces import Step, StepResult
+
+
+class MakeTable(Step):
+    name = "make"
+    inputs = []
+    outputs = ["feature_table"]
+
+    def run(self, ctx):
+        rng = np.random.default_rng(ctx.config.get("make", {}).get("seed", 0))
+        a = rng.normal(size=80)
+        df = pl.DataFrame({
+            "era": [f"e{i // 10}" for i in range(80)],
+            "feature_a": scale(a),
+            "target": a + rng.normal(scale=0.5, size=80),
+        })
+        return StepResult(outputs={"feature_table": ctx.put(df, "feature_table")})
+''',
+    "hostpkg/backend.py": '''\
+import numpy as np
+
+
+class SlopeBackend:
+    def fit(self, X, y, params):
+        x = X.to_numpy()[:, 0]
+        self.w = float(np.dot(x, y) / np.dot(x, x))
+
+    def predict(self, X):
+        return X.to_numpy()[:, 0] * self.w
+
+    def save(self, path):
+        path.write_text(str(self.w))
+
+    def load(self, path):
+        self.w = float(path.read_text())
+''',
+    "hostpkg/pipeline.py": '''\
+from hostpkg.steps import MakeTable
+from mlpipe.steps.cvplan import CVPlanStep
+from mlpipe.steps.train import TrainStep
+
+DEFAULT_CONFIG = {
+    "cvplan": {"n_folds": 2, "purge_eras": 0, "embargo_eras": 0},
+    "train": {"model": {"kind": "hostslope"}},
+}
+
+
+def build_steps():
+    return [MakeTable(), CVPlanStep(), TrainStep()]
+''',
+    "hostpkg-0.1.dist-info/METADATA": "Metadata-Version: 2.1\nName: hostpkg\nVersion: 0.1\n",
+    "hostpkg-0.1.dist-info/entry_points.txt": (
+        "[mlpipe.pipelines]\nhostpipe = hostpkg.pipeline\n\n"
+        "[mlpipe.backends]\nhostslope = hostpkg.backend:SlopeBackend\n"
+    ),
+}
+
+
+@pytest.fixture()
+def host_site(tmp_path, monkeypatch):
+    """A host package 'installed' the way an editable install would appear:
+    importable from sys.path, with entry points in its dist-info."""
+    site = tmp_path / "site"
+    for rel, text in HOST_FILES.items():
+        (site / rel).parent.mkdir(parents=True, exist_ok=True)
+        (site / rel).write_text(text)
+    monkeypatch.syspath_prepend(str(site))
+    yield site
+    for name in [m for m in sys.modules if m == "hostpkg" or m.startswith("hostpkg.")]:
+        del sys.modules[name]
+
+
+def test_work0006_host_pipeline_and_backend_found_by_entry_point(host_site, tmp_path):
+    assert pipeline_module("hostpipe").__name__ == "hostpkg.pipeline"
+    assert registry.module_for("hostslope") == "hostpkg.backend"
+    assert TrainConfig.model_validate({"model": {"kind": "hostslope"}}).model.kind == "hostslope"
+
+    dirs = ["--store-dir", str(tmp_path / "store"), "--manifests-dir", str(tmp_path / "m")]
+    result = CliRunner().invoke(app, ["run", "--pipeline", "hostpipe", *dirs])
+    assert result.exit_code == 0, result.output
+    assert [line.split()[:2] for line in result.output.splitlines()] == [
+        ["make", "success"], ["cvplan", "success"], ["train", "success"],
+    ]
+
+
+def test_work0006_unknown_names_are_rejected():
+    with pytest.raises(KeyError, match="unknown pipeline 'nope'"):
+        pipeline_module("nope")
+    with pytest.raises(ValueError, match="unknown model kind 'nope'"):
+        TrainConfig.model_validate({"model": {"kind": "nope"}})
+
+
+def test_work0006_a_name_claimed_twice_is_an_error(host_site):
+    ep = host_site / "hostpkg-0.1.dist-info/entry_points.txt"
+    ep.write_text("[mlpipe.backends]\nlightgbm = hostpkg.backend:SlopeBackend\n")
+    with pytest.raises(ValueError, match="'lightgbm' is registered twice"):
+        registry.kinds()
+
+
+def test_work0006_host_helper_edit_changes_the_step_signature(host_site):
+    from hostpkg.steps import MakeTable
+
+    mods = code_modules(MakeTable())
+    assert "hostpkg.helpers" in mods                      # host package is first-party
+    assert not any(m.startswith("mlpipe.core") for m in mods)  # core never is
+    before = code_hash(MakeTable())
+    (host_site / "hostpkg/helpers.py").write_text("def scale(x):\n    return x * 3.0\n")
+    assert code_hash(MakeTable()) != before
+
+
+def test_work0006_model_artifact_carries_backend_code(host_site, tmp_path):
+    before = module_code_hash("hostpkg.backend")
+    pipe = Pipeline(pipeline_module("hostpipe").build_steps(), LocalCasStore(tmp_path / "s"),
+                    tmp_path / "m", pipeline_module("hostpipe").DEFAULT_CONFIG)
+    first = pipe.run()["artifacts"]["model"].content_hash
+    assert LocalCasStore(tmp_path / "s").load(first)["backend_code"] == before
+
+    # A predict-only edit leaves the fitted state identical, yet the model's bytes
+    # move, so anything downstream that calls predict is invalidated too.
+    path = host_site / "hostpkg/backend.py"
+    path.write_text(path.read_text().replace("* self.w", "* self.w * 1.0"))
+    assert module_code_hash("hostpkg.backend") != before
+    assert pipe.run()["artifacts"]["model"].content_hash != first
+    with pytest.raises(ModuleNotFoundError):
+        module_code_hash("hostpkg.nope")

@@ -8,30 +8,31 @@ so stored state alone reproduces the OOF predictions.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
 
 import numpy as np
 import polars as pl
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-from mlpipe.backends.registry import module_for, resolve
+from mlpipe.backends.registry import kinds, module_for, resolve
 from mlpipe.core.interfaces import Step, StepResult
+from mlpipe.core.signature import module_code_hash
 
 
-class LightGBMConfig(BaseModel):
-    kind: Literal["lightgbm"] = "lightgbm"
+class ModelConfig(BaseModel):
+    kind: str = "lightgbm"  # a registered backend: builtin or `mlpipe.backends` entry point
     params: dict[str, Any] = {}
 
-
-class TorchMLPConfig(BaseModel):
-    kind: Literal["torch_mlp"] = "torch_mlp"  # backend arrives in cycle 8
-    params: dict[str, Any] = {}
+    @field_validator("kind")
+    @classmethod
+    def _registered(cls, kind: str) -> str:
+        if kind not in kinds():
+            raise ValueError(f"unknown model kind {kind!r}; registered: {sorted(kinds())}")
+        return kind
 
 
 class TrainConfig(BaseModel):
-    model: LightGBMConfig | TorchMLPConfig = Field(
-        default_factory=LightGBMConfig, discriminator="kind"
-    )
+    model: ModelConfig = Field(default_factory=ModelConfig)
     target: str = "target"
 
 
@@ -71,8 +72,16 @@ class TrainStep(Step):
         full = backend_cls()
         full.fit(X, y, cfg.model.params)
 
+        # A pickled backend names its class, not its source. Hashing the backend's
+        # code into the artifact makes a predict-only edit change the model's bytes,
+        # so every consumer that calls predict (evaluate, register, `mlpipe predict`)
+        # re-runs instead of serving a stale cache hit.
+        code = module_code_hash(module_for(cfg.model.kind))
         outs = {
-            "model": ctx.put({"full": full, "fold_models": fold_backends}, "model", ext="joblib"),
+            "model": ctx.put(
+                {"full": full, "fold_models": fold_backends, "backend_code": code},
+                "model", ext="joblib",
+            ),
             "oof_preds": ctx.put(
                 pl.DataFrame({"era": df["era"], "prediction": oof, cfg.target: y}), "oof_preds"
             ),

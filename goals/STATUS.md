@@ -3,7 +3,7 @@
 **Current state (update in place; the log below is append-only):**
 - Build cycles 0–10: code complete since 2026-08-20.
 - Active work: work/0006 plan ([plan.md](../work/0006-core-library-extraction/plan.md)).
-  Phase 1 (steps 1–7b) done; phase 2 steps 8–10 done; next is step 11.
+  Phase 1 (steps 1–7b) done; phase 2 steps 8–11 done; next is step 12.
 - Data: Numerai **v6.0** (v5.x training files are no longer served). Raw files are in
   `/workspace/raw_data/numerai/v6.0` (downloaded host-side 2026-10-20).
 - Real data: **smoke-proven only** (2026-10-20): the whole chain on 100 eras, cache-hit
@@ -217,3 +217,32 @@ Log:
 - 2026-10-21: the bootstrap twin `mlpipe-claude-init-package/` was deleted by the human
   (work/0004 G, plan step 7). This commit records the deletion and drops its ruff
   exclude.
+- 2026-10-21: work/0006 step 11, entry-point discovery and signature-closure fixes (0007 M1).
+  - New `mlpipe.plugins`: the `mlpipe.pipelines` and `mlpipe.backends` entry-point
+    groups (stdlib `importlib.metadata`).
+    - mlpipe's own pipelines and backends stay builtins, so no resync is needed.
+    - A name registered twice is an error.
+    - `cli._load` and the backend registry go through it.
+    - `train.model` is one `ModelConfig(kind, params)` whose `kind` is validated
+      against the registry. It replaces the closed two-member union.
+    - Signatures are unchanged, because they hash the raw config subtree.
+  - Signature closure: for a host step, the host's own top-level package is
+    first-party; `mlpipe.core` never is. mlpipe steps keep their exact prefixes, and
+    on real data ingest→cvplan were cache hits.
+  - Step-10 gap fixed: train stores `backend_code = module_code_hash(backend)` in the
+    model artifact. A predict-only backend edit now moves the model's bytes, so
+    evaluate, register and `mlpipe predict` invalidate.
+  - Tests use a fake installed host package (`dist-info` with `entry_points.txt` on
+    `sys.path`) and cover:
+    - `mlpipe run --pipeline hostpipe` with a host backend, end to end;
+    - unknown names;
+    - a duplicate claim;
+    - a host-helper edit changing the signature;
+    - a predict-only edit changing the model hash.
+  - Real data (v6.0 smoke): train onward re-ran, plan `7c4df3df`.
+    - OOF predictions and eval report `f48e7200` are byte-identical.
+    - New model `a450b937` and bundle `e6e0f558`.
+    - `predict` served 7,154 rows.
+  - 105 tests green, ruff clean. Orchestration modules: 586 lines, up 29 for the
+    closure refactor plus `module_code_hash`, which needs core's module-finding to
+    hash an artifact's code. Still under the ~600 signal.

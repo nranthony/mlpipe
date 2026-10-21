@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import importlib
 from pathlib import Path
 
 import typer
@@ -14,6 +13,7 @@ import yaml
 from mlpipe.core.config import PipelineConfig, validate_config
 from mlpipe.core.pipeline import Pipeline
 from mlpipe.core.store import LocalCasStore
+from mlpipe.plugins import pipeline_module
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 
@@ -28,7 +28,7 @@ def _log_dir(pipeline: str, manifests_dir: Path | None) -> Path:
 
 @app.command()
 def run(
-    pipeline: str = typer.Option("demo", help="pipeline module in mlpipe.steps"),
+    pipeline: str = typer.Option("demo", help="registered pipeline (builtin or mlpipe.pipelines entry point)"),
     from_step: str = typer.Option(
         None, "--from", help="first step to run; upstream must be cached under this config"
     ),
@@ -50,7 +50,7 @@ def run(
 
 def _load(pipeline: str, config: Path | None) -> tuple[list, dict, PipelineConfig]:
     """Steps, raw config, and the validated top-level keys (tracker, tune, ...)."""
-    module = importlib.import_module(f"mlpipe.steps.{pipeline}")
+    module = pipeline_module(pipeline)
     cfg = yaml.safe_load(config.read_text()) if config else getattr(module, "DEFAULT_CONFIG", {})
     steps = module.build_steps()
     return steps, cfg, validate_config(cfg, [s.name for s in steps])

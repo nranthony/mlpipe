@@ -57,7 +57,15 @@ def _module_path(name: str) -> Path | None:
     return Path(spec.origin) if spec and spec.origin else None
 
 
-def _imports(path: Path) -> set[str]:
+def _first_party(own: str) -> tuple[str, ...]:
+    """Prefixes whose source counts as behaviour for code rooted at module `own`:
+    mlpipe's steps and backends, plus a host step's own top-level package, so a
+    host helper edit changes the signature (work/0007 M1). Never mlpipe.core."""
+    root = own.split(".")[0]
+    return FIRST_PARTY if root in ("mlpipe", "__main__") else (*FIRST_PARTY, f"{root}.")
+
+
+def _imports(path: Path, prefixes: tuple[str, ...]) -> set[str]:
     """First-party module names a source file imports (static parse, no import)."""
     found: set[str] = set()
     for node in ast.walk(ast.parse(path.read_bytes())):
@@ -66,14 +74,11 @@ def _imports(path: Path) -> set[str]:
         elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
             found.add(node.module)  # `from pkg.mod import name`
             found.update(f"{node.module}.{a.name}" for a in node.names)  # `from pkg import mod`
-    return {m for m in found if m.startswith(FIRST_PARTY)}
+    host_roots = {p[:-1] for p in prefixes[len(FIRST_PARTY):]}  # `import hostpkg` itself
+    return {m for m in found if m.startswith(prefixes) or m in host_roots}
 
 
-def code_modules(step: Any, config: Any = None) -> dict[str, Path]:
-    """Every source file the step's behaviour depends on: own module + closure."""
-    own = type(step).__module__
-    found = {own: Path(inspect.getfile(type(step)))}
-    queue = list(_imports(found[own])) + list(step.code_deps(config_subtree(config, step.name)))
+def _closure(found: dict[str, Path], queue: list[str], prefixes: tuple[str, ...]) -> dict[str, Path]:
     while queue:
         name = queue.pop()
         if name in found:
@@ -82,14 +87,38 @@ def code_modules(step: Any, config: Any = None) -> dict[str, Path]:
         if path is None or not path.exists():
             continue  # a symbol, not a module
         found[name] = path
-        queue.extend(_imports(path) - found.keys())
+        queue.extend(_imports(path, prefixes) - found.keys())
     return found
 
 
-def code_hash(step: Any, config: Any = None) -> str:
-    """Hash over the whole closure, keyed by module name so moves are visible."""
-    files = {n: sha256_bytes(p.read_bytes()) for n, p in code_modules(step, config).items()}
+def _hash_files(found: dict[str, Path]) -> str:
+    """Keyed by module name, so moves are visible."""
+    files = {n: sha256_bytes(p.read_bytes()) for n, p in found.items()}
     return sha256_bytes(canonical_json(files).encode())
+
+
+def code_modules(step: Any, config: Any = None) -> dict[str, Path]:
+    """Every source file the step's behaviour depends on: own module + closure."""
+    own = type(step).__module__
+    prefixes = _first_party(own)
+    found = {own: Path(inspect.getfile(type(step)))}
+    queue = list(_imports(found[own], prefixes))
+    queue += step.code_deps(config_subtree(config, step.name))
+    return _closure(found, queue, prefixes)
+
+
+def code_hash(step: Any, config: Any = None) -> str:
+    """Hash over the whole closure."""
+    return _hash_files(code_modules(step, config))
+
+
+def module_code_hash(name: str) -> str:
+    """Hash of a module and its first-party closure, for artifacts whose bytes do
+    not carry the code that runs them (a pickled model names its class only)."""
+    found = _closure({}, [name], _first_party(name))
+    if name not in found:
+        raise ModuleNotFoundError(f"no source for module {name!r}")
+    return _hash_files(found)
 
 
 def step_signature(step: Any, input_hashes: dict[str, str], config: Any) -> str:

@@ -27,8 +27,9 @@ from a pinned git tag (ADR-0005); Numerai is its real-data example and test case
   truth; losing MLflow must lose zero provenance.
 - **Data versioning:** built-in content-addressed store. No DVC.
 - **Config:** pydantic v2 models composed from YAML. Swappable slots are discriminated
-  unions (e.g. `model: LightGBMConfig | TorchConfig`). A small registry maps config
-  type → implementation class. Validation errors must occur before any step runs.
+  unions (e.g. a feature `transformer`) or, where hosts can plug in, a `kind` validated
+  against a registry (`train.model.kind`: builtins plus the `mlpipe.backends` entry
+  points). Validation errors must occur before any step runs.
   A config is one subtree per step plus the top-level `PipelineConfig`
   (`core/config.py`: `tracker`, `tune`, `download_dir`); any other top-level key is
   rejected. Top-level keys sit outside every signature, so nothing that changes a
@@ -49,9 +50,13 @@ filesystem, tracker SDK, or model libraries directly — only `RunContext`.
 
 **Signature** — hash over (step name, step code version, resolved config subtree for the
 step, input artifact hashes). Code version = hash of the step's source file **closure**:
-its own module, every module under `mlpipe.steps.*` / `mlpipe.backends.*` reachable from
-it by import, and any module it resolves lazily and declares via `Step.code_deps` (the
-model backend for the configured `kind`). The closure is found by `find_spec` + `ast`
+its own module, every module under `mlpipe.steps.*` / `mlpipe.backends.*` — and, for a
+host step, under the host's own top-level package — reachable from it by import, and
+any module it resolves lazily and declares via `Step.code_deps` (the model backend for
+the configured `kind`). Code that runs from inside an artifact is a separate case: a
+pickled model names its class, not its source, so `train` stores
+`module_code_hash(backend)` in the model artifact. A predict-only backend edit then
+moves the model's bytes, and every consumer that calls `predict` re-runs. The closure is found by `find_spec` + `ast`
 parsing, never by importing — a signature must be computable on a cache hit without
 pulling in lightgbm or torch. `mlpipe.core.*` is deliberately **excluded**: it is the
 orchestrator, not the computation, and including it would invalidate every artifact on
@@ -163,7 +168,17 @@ and the block can be iterated via the CLI with upstream served from cache.
 The engine (`core/`, `cli.py`, generic backends and trackers behind extras) ships as
 this repo's `mlpipe` distribution. Host repos pin it to a git tag and get fixes as
 version bumps, not merges. Host pipelines and backends register through entry points
-(`mlpipe.pipelines`, `mlpipe.backends`). Before the first tag:
+(`mlpipe.plugins`):
+
+```toml
+[project.entry-points."mlpipe.pipelines"]
+myproj = "myproj.pipeline"             # module with build_steps() and DEFAULT_CONFIG
+[project.entry-points."mlpipe.backends"]
+xgboost = "myproj.backends:XGBBackend"  # a ModelBackend class
+```
+
+A name claimed twice is an error. Entry points come from installed metadata, so they
+appear after the host package is (re)installed. Before the first tag:
 
 - the core is domain-neutral: no era concepts in ports, and the import boundary is
   test-enforced;
