@@ -14,6 +14,11 @@
   `bundle_hash`), and the registry it referred to is gone. Only `mlpipe promote` may
   rewrite it; `gc --dry-run` reports that it roots nothing. Smoke runs are never promoted.
 - Store: 36 artifacts, 5.36 GB, all kept today by the 30-day window alone.
+- Known issue (found 2026-10-22, not fixed): the Numerai example's `ingest` signature
+  covers only `version` + code, and `fetch` skips any file already on disk. A new
+  round's `live.parquet` at the same path is never re-downloaded, and ingest stays
+  cached, so `predict` scores stale live rows. A fix needs a way for a file's identity
+  (size + mtime, or a re-download policy) to reach the signature.
 
 Log:
 - 2026-08-20: Bootstrap skeleton delivered to repo root. Cycle 0 attempted; blocked
