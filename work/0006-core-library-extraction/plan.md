@@ -43,7 +43,7 @@
 | # | Step | State |
 |---|---|---|
 | 13 | Move Numerai steps to `examples/numerai/` (registered via entry point). `cli.py` goes domain-free: `predict --input` + pipeline-provided prepare hook, `promote` with optional `plan_hash`/`target`, and a test that `cli.py` names no Numerai artifacts (0007 A2, A3 promote half). Full real-data run (~2 h, all Numerai signatures go cold once); tag `v0.1.0` | **done** 2026-10-21 (`mlpipe.examples.numerai`, decision 2026-10-21). Full v6.0 run: plan `8b0a1167`, bundle `f7cc4688`, 26 min. Human steps done: version 0.1.0 + `uv lock`, tag `v0.1.0` (`4827571`) |
-| 14 | numerai repo adoption: its work/0010 decisions as ADRs there; wrap one stage; prove cache hit | todo; **blocked on work/0008 → v0.2.0** (numerai's work/0012 review found false-cache-hit paths a host would hit). Driven from numerai: host steps over mlpipe's core, not the example steps (review §6). **Human: dependency install there, pinned to v0.2.0** |
+| 14 | numerai repo adoption: its work/0010 decisions as ADRs there; wrap one stage; prove cache hit | todo; **blocked on the v0.2.0 tag** (work/0008, built 2026-10-22: the false-cache-hit paths numerai's work/0012 review found). Driven from numerai: host steps over mlpipe's core, not the example steps (review §6). **Human: dependency install there, pinned to v0.2.0** |
 | 15 | Optional: Copier scaffolding template + `/template-sync` skill (blueprint: 0007 "Template Architecture") | after 14; **human: copier install + ADR** |
 | 16 | `mlpipe gc --dry-run`: report unreachable store shards (roots: promoted lineages, `baselines.yaml`, a retention window). The actual purge is run by a human | **done** 2026-10-22 (`mlpipe/gc.py`, outside core; refuses without `--dry-run`) |
 

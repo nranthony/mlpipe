@@ -8,23 +8,34 @@ Cache hits still write a manifest (status "cached") — every execution leaves o
 from __future__ import annotations
 
 import copy
+import json
 import platform
 import traceback
 from datetime import UTC, datetime
+from importlib import metadata
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from mlpipe.core.config import validate_config
+from mlpipe.core.config import forbids_extras, validate_config
 from mlpipe.core.context import NoopTracker, RunContext
 from mlpipe.core.interfaces import Artifact, Step
-from mlpipe.core.manifest import ManifestLog, git_commit, git_dirty
+from mlpipe.core.manifest import ManifestLog, git_commit, git_dirty, mlpipe_info
 from mlpipe.core.signature import config_hash, config_subtree, sha256_bytes
 
 
+def parse_value(raw: str) -> Any:
+    """JSON first, then YAML: YAML 1.1 reads `1e-05` (how Python prints small
+    floats) as a string, and a string param would also enter the signature."""
+    try:
+        return json.loads(raw)
+    except ValueError:
+        return yaml.safe_load(raw)
+
+
 def apply_overrides(config: dict, overrides: list[str] | None) -> dict:
-    """Apply --set key.path=value pairs (YAML-typed values) to a config copy."""
+    """Apply --set key.path=value pairs (JSON/YAML-typed values) to a config copy."""
     config = copy.deepcopy(config)
     for item in overrides or []:
         keypath, _, raw = item.partition("=")
@@ -32,23 +43,38 @@ def apply_overrides(config: dict, overrides: list[str] | None) -> dict:
         *parents, leaf = keypath.split(".")
         for part in parents:
             node = node.setdefault(part, {})
-        node[leaf] = yaml.safe_load(raw)
+        node[leaf] = parse_value(raw)
     return config
 
 
 LOCKFILES = ("uv.lock", "poetry.lock", "pdm.lock", "pixi.lock", "requirements.lock")
+# Versions recorded in every manifest when installed (names only: nothing imported).
+PACKAGES = ("polars", "numpy", "pydantic", "scikit-learn", "lightgbm", "torch")
 
 
-def environment_info() -> dict:
+def _versions(names: tuple[str, ...]) -> dict[str, str]:
+    found = {}
+    for name in dict.fromkeys(names):
+        try:
+            found[name] = metadata.version(name)
+        except metadata.PackageNotFoundError:
+            pass
+    return found
+
+
+def environment_info(project_root: Path | None = None, packages: tuple[str, ...] = ()) -> dict:
     """What ran it, beyond the signature. Computed once per run. No CUDA probe:
     that would import torch into core (ADR-0004); backends record devices."""
-    lock = next((Path(n) for n in LOCKFILES if Path(n).exists()), None)
+    root = Path(project_root or ".")
+    lock = next((root / n for n in LOCKFILES if (root / n).exists()), None)
     return {
         "lockfile": lock.name if lock else None,
         "lockfile_hash": sha256_bytes(lock.read_bytes()) if lock else None,
         "python_version": platform.python_version(),
         "platform": platform.platform(),
-        "git_dirty": git_dirty(),
+        "git_dirty": git_dirty(project_root),
+        "mlpipe": mlpipe_info(),
+        "packages": _versions((*PACKAGES, *packages)),
     }
 
 
@@ -64,12 +90,18 @@ class Pipeline:
         manifests_dir: Path | str,
         config: dict | None = None,
         tracker: Any = None,
+        project_root: Path | str | None = None,
+        packages: tuple[str, ...] = (),
     ) -> None:
         self.steps = list(steps)
         self.store = store
         self.log = ManifestLog(manifests_dir)
         self.config = config or {}
         self.tracker = tracker or NoopTracker()
+        # The host project: its git commit and lockfile go in every manifest
+        # (default: the cwd). `packages` adds names to the recorded versions.
+        self.project_root = Path(project_root) if project_root else None
+        self.packages = tuple(packages)
 
     def run(
         self,
@@ -85,7 +117,14 @@ class Pipeline:
         for step in self.steps:  # config typos die here, before any step runs
             model = getattr(step, "config_model", None)
             if model is not None:
+                if not forbids_extras(model):  # else a typo vanishes, signature included
+                    raise TypeError(
+                        f"step {step.name!r}: {model.__name__} must forbid extra keys "
+                        "(subclass mlpipe.core.config.StrictConfig)"
+                    )
                 config[step.name] = model.model_validate(config.get(step.name, {})).model_dump()
+            elif config.get(step.name):  # nothing could validate it: a typo would pass
+                raise TypeError(f"step {step.name!r} has config but no config_model")
         ctx = RunContext(config, self.store, self.tracker)
         ctx.manifest_log = self.log
         for artifact in seeds or []:
@@ -93,7 +132,7 @@ class Pipeline:
 
         lo = names.index(from_step) if from_step else 0
         hi = names.index(to_step) + 1 if to_step else len(self.steps)
-        env = environment_info()
+        env = environment_info(self.project_root, self.packages)
 
         # Upstream of --from is resolved by signature under the CURRENT config and
         # must be a cache hit: --from asserts "upstream is cached", it never serves
@@ -114,14 +153,14 @@ class Pipeline:
         env: dict,
         from_step: str | None = None,
     ) -> dict:
-        ctx.reset_step()
+        ctx.reset_step(step.inputs)
         started = _now()
         input_hashes = ctx.input_hashes(step.inputs)
         sig = step.signature(ctx)
         base = {
             "step": step.name,
             "signature": sig,
-            "git_commit": git_commit(),
+            "git_commit": git_commit(self.project_root),
             "config_hash": config_hash(config, step.name),
             "config": config_subtree(config, step.name),  # what promote pins (ADR-0006)
             "environment": env,

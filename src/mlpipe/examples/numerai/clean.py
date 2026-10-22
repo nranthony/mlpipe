@@ -10,25 +10,26 @@ from __future__ import annotations
 from typing import Literal
 
 import polars as pl
-from pydantic import BaseModel, Field
+from pydantic import Field
 
+from mlpipe.core.config import StrictConfig
 from mlpipe.core.interfaces import Step, StepResult
 
 
-class BaselineCleanConfig(BaseModel):
+class BaselineCleanConfig(StrictConfig):
     kind: Literal["baseline"] = "baseline"
     feature_set: str = "medium"
     fill_value: int = 2          # constant from config, never computed from data
     targets: list[str] = ["target"]
 
 
-class MinimalCleanConfig(BaseModel):
+class MinimalCleanConfig(StrictConfig):
     kind: Literal["minimal"] = "minimal"
     feature_set: str = "medium"
     targets: list[str] = ["target"]
 
 
-class EraSlice(BaseModel):
+class EraSlice(StrictConfig):
     """Smoke-run row cut (work/0003). Whole eras only: row sampling would keep the
     plan hash and look comparable to a full run. `tail`/`head` keep n contiguous
     eras (purge/embargo stay meaningful); `stride` keeps every n-th era, which
@@ -38,7 +39,7 @@ class EraSlice(BaseModel):
     n: int = Field(gt=0)
 
 
-class CleanConfig(BaseModel):
+class CleanConfig(StrictConfig):
     cleaner: BaselineCleanConfig | MinimalCleanConfig = Field(
         default_factory=BaselineCleanConfig, discriminator="kind"
     )
@@ -77,7 +78,8 @@ CLEANERS = {"baseline": _baseline, "minimal": _minimal}  # kind -> implementatio
 class CleanStep(Step):
     name = "clean"
     inputs = ["validated_train", "validated_validation", "features_meta"]
-    outputs = ["clean_table", "clean_validation"]
+    # serve_recipe: what serving must replay on live rows (register bundles it)
+    outputs = ["clean_table", "clean_validation", "serve_recipe"]
     config_model = CleanConfig
 
     def run(self, ctx):
@@ -104,4 +106,8 @@ class CleanStep(Step):
                 "excluded": step_cfg.exclude_features,
                 "cleaner": cfg.kind, "era_slice": step_cfg.era_slice and step_cfg.era_slice.model_dump(),
             })
+        outs["serve_recipe"] = ctx.put(
+            {"cleaner": cfg.model_dump(), "era_column": step_cfg.era_column},
+            "serve_recipe", ext="json",
+        )
         return StepResult(outputs=outs)

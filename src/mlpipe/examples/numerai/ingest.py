@@ -12,6 +12,7 @@ from pathlib import Path
 
 import polars as pl
 
+from mlpipe.core.config import StrictConfig
 from mlpipe.core.interfaces import Step, StepResult
 
 DATASETS = {
@@ -31,14 +32,18 @@ def fetch(version: str, filename: str, download_dir: Path) -> Path:
     return dest
 
 
+class IngestConfig(StrictConfig):
+    version: str = "v6.0"  # v5.x training files retired (2026-10)
+
+
 class IngestStep(Step):
     name = "ingest"
     inputs: list[str] = []
     outputs = ["raw_train", "raw_validation", "raw_live", "features_meta"]
+    config_model = IngestConfig
 
     def run(self, ctx):
-        cfg = ctx.config.get(self.name, {})
-        version = cfg.get("version", "v6.0")  # v5.x training files retired (2026-10)
+        version = IngestConfig.model_validate(ctx.config.get(self.name, {})).version
         download_dir = Path(ctx.config.get("download_dir", "/workspace/raw_data/numerai"))
 
         outs = {}

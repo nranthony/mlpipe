@@ -1,7 +1,11 @@
 # 0008 spec — Cache and provenance correctness before a host adopts the core
 
-- Status: **Draft — awaiting sign-off.** Ships as **v0.2.0**, which numerai pins instead
-  of v0.1.0. (A host must not adopt a cache that can return false hits.)
+- Status: **Built 2026-10-22** (signed off by Neil the same day). Ships as **v0.2.0**,
+  which numerai pins instead of v0.1.0. Release is a human step: `uv lock`, tag, push.
+  This item archives once the tag exists.
+- Added while building: item 3 also refuses config for a step with *no* `config_model`.
+  The demo steps and Numerai `ingest` had none, so a typo there passed unvalidated.
+  Both now declare strict models.
 - Origin: numerai `work/0012-ml-core-review` (2026-10-22), findings P0-7, P0-8, P0-9,
   P1-15, P1-16, P1-17 there, and its `reviews/mlops.md` C1–C6 and C10–C13.
 - Every finding below was re-checked in this repo on 2026-10-22: by reading the cited

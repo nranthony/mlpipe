@@ -29,7 +29,13 @@ from a pinned git tag (ADR-0005); Numerai is its real-data example and test case
 - **Config:** pydantic v2 models composed from YAML. Swappable slots are discriminated
   unions (e.g. a feature `transformer`) or, where hosts can plug in, a `kind` validated
   against a registry (`train.model.kind`: builtins plus the `mlpipe.backends` entry
-  points). Validation errors must occur before any step runs.
+  points). Validation errors must occur before any step runs. Every config model, step
+  subtrees and their nested models included, subclasses `StrictConfig`
+  (`extra="forbid"`): an unknown key fails validation instead of vanishing from the
+  config and the signature. `Pipeline.run` refuses a step `config_model` that allows
+  extras, and config for a step that declares no `config_model` at all. A step reads only its own subtree (plus the top-level location
+  `download_dir`); anything it needs from another step arrives as an input artifact.
+  `--set` values parse as JSON first, then YAML (YAML 1.1 reads `1e-05` as a string).
   A config is one subtree per step plus the top-level `PipelineConfig`
   (`core/config.py`: `tracker`, `tune`, `download_dir`); any other top-level key is
   rejected. Top-level keys sit outside every signature, so nothing that changes a
@@ -46,14 +52,18 @@ Stored at `store/<hash[:2]>/<hash>.<ext>`. Immutable, deduplicated.
 
 **Step** — a named, pure function from named input artifacts to named output artifacts.
 Declares `inputs: list[str]` and `outputs: list[str]` (artifact keys). Never touches the
-filesystem, tracker SDK, or model libraries directly — only `RunContext`.
+filesystem, tracker SDK, or model libraries directly — only `RunContext`, which serves
+declared inputs only (reading any other key raises).
 
 **Signature** — hash over (step name, step code version, resolved config subtree for the
-step, input artifact hashes). Code version = hash of the step's source file **closure**:
+step, input artifact hashes, `CORE_SIGNATURE_VERSION`). Code version = hash of the step's source file **closure**:
 its own module, every module under `mlpipe.steps.*` / `mlpipe.backends.*` — and, for a
 host step, under the host's own top-level package — reachable from it by import, and
 any module it resolves lazily and declares via `Step.code_deps` (the model backend for
-the configured `kind`). Relative imports resolve against the importing module's
+the configured `kind`), closed over with that module's own package as first-party, so a
+host backend's helpers count. `Step.code_roots` adds prefixes for code outside both
+(e.g. `("shrec.",)` for a sibling library). Data files never reach a closure: a step
+that depends on one takes it as a seeded artifact or a config value. Relative imports resolve against the importing module's
 package, so they count the same as absolute ones. Code that runs from inside an artifact is a separate case: a
 pickled model names its class, not its source, so `train` stores
 `module_code_hash(backend)` in the model artifact. A predict-only backend edit then
@@ -61,7 +71,9 @@ moves the model's bytes, and every consumer that calls `predict` re-runs. The cl
 parsing, never by importing — a signature must be computable on a cache hit without
 pulling in lightgbm or torch. `mlpipe.core.*` is deliberately **excluded**: it is the
 orchestrator, not the computation, and including it would invalidate every artifact on
-any core edit; core is covered by tests and by the `git_commit` in every manifest.
+any core edit. Instead, a core edit that changes what a step computes (codecs, override
+parsing, config normalisation) bumps `CORE_SIGNATURE_VERSION` by hand, and every
+manifest records which mlpipe ran (`environment.mlpipe`).
 
 **Caching** — before running a step, look up its signature in the manifest index. If a
 manifest exists and all its output hashes are present in the store, skip and return the
@@ -72,8 +84,10 @@ be a cache hit under the current config, or the run fails. It never serves outpu
 that a different config produced.
 
 **Run manifest** — one JSON file per step execution, append-only, in `manifests/`:
-step name, signature, timestamps, status, git commit, config hash and resolved config
-subtree, environment (lockfile + hash, Python version, platform, `git_dirty`), input
+step name, signature, timestamps, status, the project's git commit (`Pipeline(project_root=…)`,
+default the cwd), config hash and resolved config subtree, environment (the project's
+lockfile + hash and `git_dirty`, Python version, platform, `mlpipe` version and source
+commit, versions of key packages), input
 hashes, output hashes, metrics summary; failed runs add `error` and `traceback`.
 `index.jsonl` appends are `flock`ed. Every output hash
 appears as an input hash in some later manifest → the lineage graph is implicit and
@@ -90,12 +104,12 @@ the pinned bundle. The next iteration cycle builds on the pinned baseline.
 |---|-------|------------------------------|-------|
 | 1 | Ingest & snapshot | source config → `raw_train`, `raw_validation`, `raw_live`, `features_meta` | numerapi pull into the shared download cache, freeze exact bytes, hash. Record dataset name/version/size in the manifest. |
 | 2 | Validate | raw tables → `validated_*` (zero-copy aliases) + `validation_report` | pandera schemas: columns, the configured era column, feature dtypes against an allow-list, per-dtype null bounds, era monotonicity, row counts vs previous snapshot. Hard gate — fail loud. |
-| 3 | Clean & transform | validated → `clean_table` + `clean_validation` | Stateless only. Renames the source's era column to the canonical `era` (v6.0: `date`) and drops `exclude_features`, so nothing downstream knows source names. Same input ⇒ same output. Polars exprs; validation cleaned with the same exprs so downstream skew checks have a target. |
+| 3 | Clean & transform | validated → `clean_table` + `clean_validation` + `serve_recipe` | Stateless only. `serve_recipe` (cleaner + source era column) is what serving replays on live rows; register takes it as an input. Renames the source's era column to the canonical `era` (v6.0: `date`) and drops `exclude_features`, so nothing downstream knows source names. Same input ⇒ same output. Polars exprs; validation cleaned with the same exprs so downstream skew checks have a target. |
 | 4 | Feature engineering | clean → `feature_table` + `feature_validation` + `fitted_transformer` | Fitted transforms learn from train only and are **unsupervised**: `fit` sees the feature matrix, never the target. A target-aware transform (target encoding, supervised selection) fitted here would leak across CV folds, so it fits per fold inside the ModelBackend instead. The transformer is a versioned artifact that travels with the model; `feature_validation` is what the skew guard compares against. |
 | 5 | Split / CV plan | feature table + cv config → `fold_plan` | Era-aware, purged, embargoed. The plan is an artifact with its own hash; model comparisons must cite the same plan hash. The `FoldPlan` type is domain-free (`folds`, `plan_hash`, `group_column`, `meta`): era, purge and embargo are this step's semantics and travel in `meta`. Generic alternative for the same slot: `GroupKFoldStep` (`steps/groupcv.py`; a group never straddles a split; no group column = shuffled row k-fold). |
 | 6 | Train & tune | features + fold_plan + model config → `model`, `oof_preds` | Via ModelBackend port. `model` is a `{full, fold_models}` bundle so stored state alone reproduces OOF (5x size, no retraining needed for audit). Optuna via `mlpipe tune`. |
 | 7 | Evaluate | model + oof_preds + fold_plan + feature_validation → `eval_report` + `eval_chart` (metrics JSON + standalone plotly HTML) | Era-wise corr, sharpe, drawdown, feature exposure — for OOF (`mean_corr`, …) and for the full model on the validation holdout (`val_mean_corr`, …), side by side. Eras with unresolved targets are skipped. Log metrics to MLflow. Generic alternative for the same slot: `TabularEvalStep` (`task: regression` → rmse, mae, r2, corr; `task: binary` → roc_auc, pr_auc, log_loss, brier, accuracy, which need probabilities, so use a classifier backend such as `lightgbm_binary` whose `predict` returns P(y=1)). |
-| 8 | Register & package | model + transformer + eval → `model_bundle` | The bundle holds model + fitted transformer + feature list + cleaner recipe + plan hash. Registry versions are created only by `mlpipe promote` (ADR-0006). |
+| 8 | Register & package | model + transformer + eval → `model_bundle` | The bundle holds model + fitted transformer + feature list + plan hash, plus the serving recipe when the pipeline declares one (`RegisterStep(recipe="serve_recipe")`: Numerai's clean emits the fill and source era column as an artifact). Registry versions are created only by `mlpipe promote` (ADR-0006). |
 
 The stateless/stateful boundary between blocks 3 and 4 is deliberate: block 3 caches on
 content alone; block 4 produces fitted state that must be versioned with the model.

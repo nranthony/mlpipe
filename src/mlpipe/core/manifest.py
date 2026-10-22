@@ -9,26 +9,44 @@ import fcntl
 import json
 import subprocess
 import uuid
+from importlib import metadata
 from pathlib import Path
 
 
-def _git(*args: str) -> str | None:
+def _git(*args: str, cwd: Path | None = None) -> str | None:
     try:
-        out = subprocess.run(["git", *args], capture_output=True, text=True, check=True)
+        out = subprocess.run(["git", *args], capture_output=True, text=True, check=True, cwd=cwd)
         return out.stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return None
 
 
-def git_commit() -> str | None:
-    return _git("rev-parse", "HEAD")
+def git_commit(cwd: Path | None = None) -> str | None:
+    return _git("rev-parse", "HEAD", cwd=cwd)
 
 
-def git_dirty() -> bool | None:
+def git_dirty(cwd: Path | None = None) -> bool | None:
     """True if tracked files differ from HEAD: the commit alone does not describe
-    what ran (mlpipe.core is outside signatures, so this matters). None = no git."""
-    out = _git("status", "--porcelain", "--untracked-files=no")
+    what ran. None = no git."""
+    out = _git("status", "--porcelain", "--untracked-files=no", cwd=cwd)
     return None if out is None else bool(out)
+
+
+def mlpipe_info() -> dict:
+    """Which mlpipe ran. In a host repo the project's git says nothing about it.
+    commit/dirty only for a source checkout (src layout); an installed copy
+    inside some other repo's venv must not report that repo's HEAD."""
+    try:
+        version = metadata.version("mlpipe")
+    except metadata.PackageNotFoundError:
+        version = None
+    root = Path(__file__).resolve().parents[3]  # <checkout>/src/mlpipe/core/manifest.py
+    checkout = (root / ".git").exists() and (root / "src" / "mlpipe").is_dir()
+    return {
+        "version": version,
+        "commit": git_commit(root) if checkout else None,
+        "dirty": git_dirty(root) if checkout else None,
+    }
 
 
 class ManifestLog:

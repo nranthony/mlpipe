@@ -1,13 +1,14 @@
 """Signature hashing: what makes a step execution unique (DESIGN.md §1).
 
 signature = hash(step name, code hash over the step's source file *closure*,
-canonical JSON of the step's resolved config subtree, sorted input hashes).
+canonical JSON of the step's resolved config subtree, sorted input hashes,
+CORE_SIGNATURE_VERSION).
 
 The closure is the step's own module plus every first-party module it can reach
 by import, plus any module it resolves lazily and declares via `code_deps`
-(model backends). Modules are located with `find_spec` and parsed with `ast` —
-nothing in the closure is imported, so computing a signature never pulls in
-lightgbm or torch.
+(model backends) with that module's own first-party imports. Modules are
+located with `find_spec` and parsed with `ast` — nothing in the closure is
+imported, so computing a signature never pulls in lightgbm or torch.
 """
 
 from __future__ import annotations
@@ -22,9 +23,13 @@ from typing import Any
 
 # Module prefixes whose source counts as step behaviour. mlpipe.core is
 # deliberately excluded: it is the orchestrator, not the computation, and
-# including it would invalidate every cached artifact on any core edit. Core
-# changes are covered by tests and by the git_commit in every manifest.
+# including it would invalidate every cached artifact on any core edit.
 FIRST_PARTY = ("mlpipe.steps.", "mlpipe.backends.", "mlpipe.examples.")
+
+# Bump by hand when a core edit changes what a step computes or how its config
+# reads (store codecs, override parsing, config normalisation): every signature
+# then moves once. Which mlpipe ran is recorded in each manifest's environment.
+CORE_SIGNATURE_VERSION = 1
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -113,11 +118,15 @@ def _hash_files(found: dict[str, Path]) -> str:
 def code_modules(step: Any, config: Any = None) -> dict[str, Path]:
     """Every source file the step's behaviour depends on: own module + closure."""
     own = type(step).__module__
-    prefixes = _first_party(own)
+    roots = tuple(getattr(step, "code_roots", ()))
+    prefixes = (*_first_party(own), *roots)
     found = {own: Path(inspect.getfile(type(step)))}
-    queue = list(_imports(found[own], own, prefixes))
-    queue += step.code_deps(config_subtree(config, step.name))
-    return _closure(found, queue, prefixes)
+    _closure(found, list(_imports(found[own], own, prefixes)), prefixes)
+    # A lazily resolved dep (a host's model backend) is closed over with its OWN
+    # package as first-party, so the host helpers it imports are hashed too.
+    for dep in step.code_deps(config_subtree(config, step.name)):
+        _closure(found, [dep], (*_first_party(dep), *roots))
+    return found
 
 
 def code_hash(step: Any, config: Any = None) -> str:
@@ -136,6 +145,7 @@ def module_code_hash(name: str) -> str:
 
 def step_signature(step: Any, input_hashes: dict[str, str], config: Any) -> str:
     payload = {
+        "core": CORE_SIGNATURE_VERSION,
         "step": step.name,
         "code": code_hash(step, config),
         "config": config_subtree(config, step.name),

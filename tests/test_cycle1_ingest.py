@@ -7,6 +7,7 @@ network: the download is skipped whenever the file already exists.
 from __future__ import annotations
 
 import json
+import shutil
 
 import polars as pl
 import pytest
@@ -93,7 +94,11 @@ def test_cycle1_version_change_busts_cache_but_download_dir_does_not(env, tmp_pa
     result = build_pipeline(store, manifests, moved).run()
     assert result["manifests"][0]["status"] == "cached"  # infra move: same identity
 
-    result = build_pipeline(
-        store, manifests, dict(moved, ingest={"version": "v9.9-test", "round": 2})
-    ).run()
+    shutil.copytree(tmp_path / "raw2" / "v9.9-test", tmp_path / "raw2" / "v9.8-test")
+    result = build_pipeline(store, manifests, dict(moved, ingest={"version": "v9.8-test"})).run()
     assert result["manifests"][0]["status"] == "success"  # identity change: re-runs
+
+    # A key ingest never reads used to move the signature silently; now it is a
+    # typo and fails validation (work/0008 item 3).
+    with pytest.raises(ValueError, match="round"):
+        build_pipeline(store, manifests, dict(moved, ingest={"version": "v9.9-test", "round": 2})).run()

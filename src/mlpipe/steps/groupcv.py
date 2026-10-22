@@ -10,13 +10,14 @@ from __future__ import annotations
 
 import numpy as np
 import polars as pl
-from pydantic import BaseModel, Field
+from pydantic import Field
 
+from mlpipe.core.config import StrictConfig
 from mlpipe.core.interfaces import FoldPlan, Step, StepResult
 from mlpipe.core.signature import canonical_json, sha256_bytes
 
 
-class GroupKFoldConfig(BaseModel):
+class GroupKFoldConfig(StrictConfig):
     n_folds: int = Field(5, ge=2)
     group_column: str | None = None  # None: every row is its own group
     seed: int = 0  # shuffles groups across folds

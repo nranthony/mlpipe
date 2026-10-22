@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import polars as pl
 
+from mlpipe.core.config import StrictConfig
 from mlpipe.core.interfaces import Step, StepResult
 
 DEFAULT_CONFIG = {
@@ -14,14 +15,24 @@ DEFAULT_CONFIG = {
 }
 
 
+class MakeDataConfig(StrictConfig):
+    rows: int = 100
+    seed: int = 1
+
+
+class SummarizeConfig(StrictConfig):
+    factor: int = 1
+
+
 class MakeData(Step):
     name = "make_data"
     inputs: list[str] = []
     outputs = ["raw_table"]
+    config_model = MakeDataConfig
 
     def run(self, ctx):
-        cfg = ctx.config.get(self.name, {})
-        n, seed = cfg.get("rows", 100), cfg.get("seed", 1)
+        cfg = MakeDataConfig.model_validate(ctx.config.get(self.name, {}))
+        n, seed = cfg.rows, cfg.seed
         df = pl.DataFrame(
             {
                 "era": pl.Series([f"e{i % 10}" for i in range(n)]),
@@ -36,10 +47,11 @@ class Summarize(Step):
     name = "summarize"
     inputs = ["raw_table"]
     outputs = ["summary"]
+    config_model = SummarizeConfig
 
     def run(self, ctx):
         df = ctx.get("raw_table")
-        factor = ctx.config.get(self.name, {}).get("factor", 1)
+        factor = SummarizeConfig.model_validate(ctx.config.get(self.name, {})).factor
         total = int(df["x"].sum()) * factor
         art = ctx.put({"total": total, "rows": df.height}, "summary", ext="json")
         ctx.log_metric("total", float(total))

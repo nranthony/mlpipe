@@ -100,14 +100,14 @@ class RunContext(ABC):
         self._store = store
         self._tracker = tracker
 
-    # inputs
+    # inputs: only keys in the running step's `inputs` (they alone are hashed)
     @abstractmethod
     def get(self, key: str) -> Any:
-        """Load an input artifact into memory."""
+        """Load a declared input artifact into memory."""
 
     @abstractmethod
     def get_lazy(self, key: str) -> pl.LazyFrame:
-        """Scan a parquet input without materializing it."""
+        """Scan a declared parquet input without materializing it."""
 
     @abstractmethod
     def input_hashes(self, keys: list[str]) -> dict[str, str]:
@@ -124,7 +124,7 @@ class RunContext(ABC):
 
     @abstractmethod
     def put_alias(self, key: str, source_key: str) -> Artifact:
-        """Re-emit an input under a new key, with no new bytes."""
+        """Re-emit a declared input under a new key, with no new bytes."""
 
     # records
     @abstractmethod
@@ -142,6 +142,11 @@ class Step(ABC):
     name: str
     inputs: list[str]
     outputs: list[str]
+    # Extra module prefixes whose source counts as this step's behaviour, beyond
+    # mlpipe's steps/backends and the step's own top-level package: e.g.
+    # ("shrec.",) for a sibling library a feature step calls. Data files never
+    # reach a signature this way; pass them as seeded artifacts or config values.
+    code_roots: tuple[str, ...] = ()
 
     def code_deps(self, cfg: dict[str, Any]) -> list[str]:
         """Module names this step resolves at runtime rather than importing, e.g.

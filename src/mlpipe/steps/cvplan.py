@@ -13,13 +13,13 @@ from __future__ import annotations
 
 import numpy as np
 import polars as pl
-from pydantic import BaseModel
 
+from mlpipe.core.config import StrictConfig
 from mlpipe.core.interfaces import FoldPlan, Step, StepResult
 from mlpipe.core.signature import canonical_json, sha256_bytes
 
 
-class CVConfig(BaseModel):
+class CVConfig(StrictConfig):
     n_folds: int = 4
     purge_eras: int = 4    # eras dropped from train on both sides of the valid block
     embargo_eras: int = 4  # extra eras dropped after the valid block (target overlap)

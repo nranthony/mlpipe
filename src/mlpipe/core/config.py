@@ -17,30 +17,38 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class _Strict(BaseModel):
+class StrictConfig(BaseModel):
+    """Base for every config model, top-level and per step: an unknown key is a
+    typo and must fail validation, never vanish from the config and the
+    signature. `Pipeline.run` refuses a step `config_model` that allows extras."""
+
     model_config = ConfigDict(extra="forbid")
 
 
-class TrackerConfig(_Strict):
+def forbids_extras(model: type[BaseModel]) -> bool:
+    return model.model_config.get("extra") == "forbid"
+
+
+class TrackerConfig(StrictConfig):
     kind: Literal["none", "mlflow"] = "none"
     uri: str = "sqlite:///mlruns/mlflow.db"
     experiment: str = "mlpipe"
 
 
-class IntSpace(_Strict):
+class IntSpace(StrictConfig):
     type: Literal["int"]
     low: int
     high: int
 
 
-class FloatSpace(_Strict):
+class FloatSpace(StrictConfig):
     type: Literal["float"]
     low: float
     high: float
     log: bool = False
 
 
-class TuneConfig(_Strict):
+class TuneConfig(StrictConfig):
     study: str
     storage: str
     metric: str  # a metric the `step` below logs, e.g. evaluate's mean_corr
@@ -50,7 +58,7 @@ class TuneConfig(_Strict):
     space: dict[str, Annotated[IntSpace | FloatSpace, Field(discriminator="type")]]
 
 
-class PipelineConfig(_Strict):
+class PipelineConfig(StrictConfig):
     tracker: TrackerConfig = Field(default_factory=TrackerConfig)
     tune: TuneConfig | None = None
     # Machine-local input cache: a location, not content, so it is outside every

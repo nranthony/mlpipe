@@ -12,14 +12,15 @@ from typing import Any
 
 import numpy as np
 import polars as pl
-from pydantic import BaseModel, Field, field_validator
+from pydantic import Field, field_validator
 
 from mlpipe.backends.registry import kinds, module_for, resolve
+from mlpipe.core.config import StrictConfig
 from mlpipe.core.interfaces import Step, StepResult
 from mlpipe.core.signature import module_code_hash
 
 
-class ModelConfig(BaseModel):
+class ModelConfig(StrictConfig):
     kind: str = "lightgbm"  # a registered backend: builtin or `mlpipe.backends` entry point
     params: dict[str, Any] = {}
 
@@ -31,7 +32,7 @@ class ModelConfig(BaseModel):
         return kind
 
 
-class TrainConfig(BaseModel):
+class TrainConfig(StrictConfig):
     model: ModelConfig = Field(default_factory=ModelConfig)
     target: str = "target"
 

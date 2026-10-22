@@ -9,13 +9,13 @@ from __future__ import annotations
 from typing import Literal
 
 import polars as pl
-from pydantic import BaseModel
 
+from mlpipe.core.config import StrictConfig
 from mlpipe.core.interfaces import Step, StepResult
 from mlpipe.steps.tabular_metrics import TASKS
 
 
-class TabularEvalConfig(BaseModel):
+class TabularEvalConfig(StrictConfig):
     task: Literal["regression", "binary"] = "regression"
     target: str = "target"
 

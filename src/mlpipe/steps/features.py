@@ -11,21 +11,22 @@ from typing import Literal
 
 import numpy as np
 import polars as pl
-from pydantic import BaseModel, Field
+from pydantic import Field
 from sklearn.preprocessing import FunctionTransformer, StandardScaler
 
+from mlpipe.core.config import StrictConfig
 from mlpipe.core.interfaces import Step, StepResult
 
 
-class PassthroughConfig(BaseModel):
+class PassthroughConfig(StrictConfig):
     kind: Literal["passthrough"] = "passthrough"  # int8 features unchanged (GBM path)
 
 
-class StandardScalerConfig(BaseModel):
+class StandardScalerConfig(StrictConfig):
     kind: Literal["standard_scaler"] = "standard_scaler"  # float32 z-scores (torch path)
 
 
-class FeatureConfig(BaseModel):
+class FeatureConfig(StrictConfig):
     transformer: PassthroughConfig | StandardScalerConfig = Field(
         default_factory=PassthroughConfig, discriminator="kind"
     )

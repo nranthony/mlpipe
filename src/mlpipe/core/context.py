@@ -38,7 +38,8 @@ class RunContext(interfaces.RunContext):
         self.manifest_log: Any = None  # set by Pipeline; enables previous()
         self.reset_step()
 
-    def reset_step(self) -> None:
+    def reset_step(self, declared: list[str] | None = None) -> None:
+        self._declared = set(declared or ())  # the running step's `inputs`
         self.step_inputs: dict[str, str] = {}
         self.step_outputs: dict[str, Artifact] = {}
         self.step_metrics: dict[str, float] = {}
@@ -57,17 +58,22 @@ class RunContext(interfaces.RunContext):
             raise KeyError(f"inputs not available: {missing}")
         return {k: self.registry[k].content_hash for k in keys}
 
-    def get(self, key: str) -> Any:
+    def _input(self, key: str) -> Artifact:
+        """Only declared inputs enter the signature, so only they may be read:
+        anything else would make a stale cache hit look valid."""
+        if key not in self._declared:
+            raise KeyError(f"undeclared input {key!r}: list it in the step's `inputs`")
         artifact = self.registry[key]
         self.step_inputs[key] = artifact.content_hash
-        return self._store.load(artifact.content_hash)
+        return artifact
+
+    def get(self, key: str) -> Any:
+        return self._store.load(self._input(key).content_hash)
 
     def get_lazy(self, key: str) -> pl.LazyFrame:
         """Streaming access to a parquet artifact — for steps that must not
         materialize multi-GB tables (e.g. validation scans)."""
-        artifact = self.registry[key]
-        self.step_inputs[key] = artifact.content_hash
-        return pl.scan_parquet(artifact.path)
+        return pl.scan_parquet(self._input(key).path)
 
     def put(self, obj: Any, key: str, *, ext: str = "parquet") -> Artifact:
         artifact = self._store.save(obj, key, ext=ext)
@@ -77,7 +83,7 @@ class RunContext(interfaces.RunContext):
 
     def put_alias(self, key: str, source_key: str) -> Artifact:
         """Pass-through output: new key, same content hash, no new bytes."""
-        src = self.registry[source_key]
+        src = self._input(source_key)
         artifact = Artifact(key=key, content_hash=src.content_hash, path=src.path, meta=src.meta)
         self.step_outputs[key] = artifact
         self.register(artifact)

@@ -9,6 +9,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
+from mlpipe.core.config import StrictConfig
 from mlpipe.core.interfaces import Step, StepResult
 from mlpipe.core.pipeline import Pipeline
 from mlpipe.core.store import LocalCasStore
@@ -23,10 +24,19 @@ def make_frame(offset: int = 0) -> pl.DataFrame:
     )
 
 
+class RowsConfig(StrictConfig):
+    rows: int = 2
+
+
+class FactorConfig(StrictConfig):
+    factor: int = 1
+
+
 class MakeData(Step):
     name = "make_data"
     inputs = ["seed"]
     outputs = ["raw_table"]
+    config_model = RowsConfig
     calls = 0
 
     def run(self, ctx):
@@ -41,6 +51,7 @@ class Summarize(Step):
     name = "summarize"
     inputs = ["raw_table"]
     outputs = ["summary"]
+    config_model = FactorConfig
     calls = 0
 
     def run(self, ctx):

@@ -3,10 +3,10 @@
 **Current state (update in place; the log below is append-only):**
 - Build cycles 0–10: code complete since 2026-08-20.
 - Active work: work/0006 plan ([plan.md](../work/0006-core-library-extraction/plan.md)).
-  Steps 1–13 and 16 done; `v0.1.0` tagged. Next: **work/0008** (cache and provenance
-  correctness, released as v0.2.0). Step 14 (numerai adoption) waits for it and is driven
-  from the numerai side (its work/0012 review). Then work/0009 (live identity, serve
-  pipeline), work/0010 (hygiene), and optional step 15.
+  Steps 1–13 and 16 done; `v0.1.0` tagged. work/0008 (cache and provenance correctness)
+  built; **human: `uv lock`, tag `v0.2.0`, push.** Step 14 (numerai adoption) waits for
+  that tag and is driven from the numerai side (its work/0012 review). Next here:
+  work/0009 (live identity, serve pipeline), work/0010 (hygiene), optional step 15.
 - Data: Numerai **v6.0** (v5.x training files are no longer served). Raw files are in
   `/workspace/raw_data/numerai/v6.0` (downloaded host-side 2026-10-20).
 - Real data: one full v6.0 run (step 13: plan `8b0a1167`, bundle `f7cc4688`), but at
@@ -394,3 +394,36 @@ Log:
     doesn't reuse the example steps, `tune` or `promote`) supersedes the step-14 drafts
     from earlier today, which never left the session scratchpad. Step 14 is now driven
     from numerai.
+- 2026-10-22 — **work/0008 built: cache and provenance correctness (v0.2.0).**
+  - Step reads:
+    - `RunContext` serves only a step's declared `inputs`: `get`, `get_lazy` and
+      `put_alias` raise on anything else.
+    - Generic `register` no longer reads `clean`/`train` config. Numerai's `clean`
+      emits a `serve_recipe` artifact, and `RegisterStep(recipe="serve_recipe")`
+      declares it. The bundle's unread `cleaner`/`model_config` fields are gone; the
+      lineage already pins each step's config.
+    - An AST test holds steps to their own config section (plus `download_dir`).
+  - Strict config:
+    - `StrictConfig` (`extra="forbid"`) underlies every shipped config model.
+    - `Pipeline.run` refuses a `config_model` that allows extras, and config for a step
+      with no `config_model`. The demo steps and Numerai `ingest` gained models.
+    - A cycle-1 test that changed ingest's signature with an unread `round` key now
+      uses a real version change.
+  - Signatures and provenance:
+    - A lazily resolved backend is closed over with its own package as first-party,
+      so host helpers count.
+    - New `Step.code_roots` hook for sibling libraries.
+    - `--set` values parse as JSON, then YAML (`1e-05` was a string).
+    - Manifests record `environment.mlpipe {version, commit, dirty}` and key
+      package versions. `Pipeline(project_root=…)` points git and lockfile lookups at
+      the host project.
+    - `CORE_SIGNATURE_VERSION = 1` is in every signature, so all cached artifacts go
+      cold once.
+  - Demo proof: fresh run, then fully cached; output bytes identical to before
+    (`5109abe5`, `b3cee3df`); `--set summarize.factr=3` is now rejected.
+  - Orchestration modules at 672 lines (past the ~600 signal). Justification: closing
+    false-cache-hit paths and recording which mlpipe ran is correctness the core
+    exists to provide, and it adds no new concept.
+  - The sandbox venv's metadata still says mlpipe 0.0.1 (a stale editable install), so
+    sandbox manifests record that until a host-side sync.
+  - 16 new tests; 139 green, ruff clean.

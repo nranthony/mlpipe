@@ -10,13 +10,13 @@ mean what they meant before.
 from __future__ import annotations
 
 import polars as pl
-from pydantic import BaseModel
 
+from mlpipe.core.config import StrictConfig
 from mlpipe.core.interfaces import Step, StepResult
 from mlpipe.examples.numerai.eval_metrics import era_scores, feature_exposure, summarize
 
 
-class EvalConfig(BaseModel):
+class EvalConfig(StrictConfig):
     target: str = "target"
 
 

@@ -81,7 +81,7 @@ def build_steps() -> list[Step]:
         CVPlanStep(),
         TrainStep(),
         EvaluateStep(),
-        RegisterStep(),
+        RegisterStep(recipe="serve_recipe"),
     ]
 
 
@@ -99,8 +99,9 @@ def prepare(frame: pl.DataFrame, bundle: dict[str, Any]) -> tuple[pl.DataFrame, 
     """(features in bundle order, id columns for the output). Replays the
     cleaner's stateless fill, and keys rows by `numerai_ticker` (what a v6.0
     submission is keyed by) plus the era under its canonical name."""
+    recipe = bundle["recipe"]  # clean's serve_recipe
     feats = frame.select(bundle["features"])
-    if bundle["cleaner"].get("kind") == "baseline":
-        feats = feats.with_columns(pl.all().fill_null(bundle["cleaner"].get("fill_value", 2)))
+    if recipe["cleaner"]["kind"] == "baseline":
+        feats = feats.with_columns(pl.all().fill_null(recipe["cleaner"]["fill_value"]))
     ids = [c for c in ("numerai_ticker",) if c in frame.columns]
-    return feats, frame.select(*ids, pl.col(bundle.get("era_column", "era")).alias("era"))
+    return feats, frame.select(*ids, pl.col(recipe["era_column"]).alias("era"))

@@ -13,8 +13,8 @@ from typing import Any
 
 import pandera.polars as pa
 import polars as pl
-from pydantic import BaseModel
 
+from mlpipe.core.config import StrictConfig
 from mlpipe.core.interfaces import Step, StepResult
 
 PASS_THROUGH = {
@@ -24,7 +24,7 @@ PASS_THROUGH = {
 }
 
 
-class ValidateConfig(BaseModel):
+class ValidateConfig(StrictConfig):
     row_tolerance: float = 0.2
     max_feature_null_frac: float = 0.0
     # Per-dtype overrides of the bound above. v6.0's Float32 factor features are
