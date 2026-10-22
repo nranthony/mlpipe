@@ -3,8 +3,10 @@
 **Current state (update in place; the log below is append-only):**
 - Build cycles 0–10: code complete since 2026-08-20.
 - Active work: work/0006 plan ([plan.md](../work/0006-core-library-extraction/plan.md)).
-  Steps 1–13 and 16 done; `v0.1.0` tagged. Next: step 14 (numerai adoption; numerai's
-  work/0011 v6.0 migration is done, so it is unblocked), then optional step 15.
+  Steps 1–13 and 16 done; `v0.1.0` tagged. Next: **work/0008** (cache and provenance
+  correctness, released as v0.2.0). Step 14 (numerai adoption) waits for it and is driven
+  from the numerai side (its work/0012 review). Then work/0009 (live identity, serve
+  pipeline), work/0010 (hygiene), and optional step 15.
 - Data: Numerai **v6.0** (v5.x training files are no longer served). Raw files are in
   `/workspace/raw_data/numerai/v6.0` (downloaded host-side 2026-10-20).
 - Real data: one full v6.0 run (step 13: plan `8b0a1167`, bundle `f7cc4688`), but at
@@ -14,11 +16,11 @@
   `bundle_hash`), and the registry it referred to is gone. Only `mlpipe promote` may
   rewrite it; `gc --dry-run` reports that it roots nothing. Smoke runs are never promoted.
 - Store: 36 artifacts, 5.36 GB, all kept today by the 30-day window alone.
-- Known issue (found 2026-10-22, not fixed): the Numerai example's `ingest` signature
-  covers only `version` + code, and `fetch` skips any file already on disk. A new
-  round's `live.parquet` at the same path is never re-downloaded, and ingest stays
-  cached, so `predict` scores stale live rows. A fix needs a way for a file's identity
-  (size + mtime, or a re-download policy) to reach the signature.
+- Known issue (found 2026-10-22, not fixed): the Numerai example never refreshes
+  `live.parquet`. `fetch` skips an existing file, and ingest's signature is
+  `{version}` + code, so `predict` scores stale live rows. Size + mtime in the signature
+  would *not* fix it: a cache hit means `fetch` never runs. Design: work/0009
+  (round-keyed path, round in config).
 
 Log:
 - 2026-08-20: Bootstrap skeleton delivered to repo root. Cycle 0 attempted; blocked
@@ -374,3 +376,21 @@ Log:
     all 36 would go: nothing is promoted under ADR-0006, so only the window keeps the
     cache. The largest are the raw v6 train (2.18 GB) and validation (1.40 GB) snapshots.
   - 3 new tests; 123 green, ruff clean.
+- 2026-10-22 — **Folded in the numerai repo's ML-core review** (`numerai/work/0012`).
+  Its mlpipe findings were re-checked here by reading and, for `--set` floats, a probe.
+  - All hold, and they become three items:
+    - **work/0008, cache and provenance correctness.** Undeclared input reads; register
+      reading other steps' config; typos dropped from step config and signatures; host
+      backend helpers outside the closure; invisible sibling code and data files;
+      `1e-05` parsing as a string; manifests recording the host's commit instead of
+      mlpipe's. Release blocker for v0.2.0, which numerai pins instead of v0.1.0.
+    - **work/0009, live identity and serving.** Round-keyed live snapshots, a serve
+      pipeline whose predictions have manifests, `run_id`.
+    - **work/0010, hygiene.** Streamed snapshots, per-pipeline `baselines.yaml`, a
+      gc root for host promotions, sorted cvplan eras, a pluggable evaluate scorer, the
+      fit/validation boundary.
+  - Corrected this file's stale-live note: the review rightly rejects size + mtime.
+  - The review's adoption design (numerai writes host steps over mlpipe's core; it
+    doesn't reuse the example steps, `tune` or `promote`) supersedes the step-14 drafts
+    from earlier today, which never left the session scratchpad. Step 14 is now driven
+    from numerai.
