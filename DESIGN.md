@@ -145,13 +145,17 @@ protocol. Plotting/metrics hide behind plain functions, not classes.
 - **Write path:** one CLI verb.
   `mlpipe run --pipeline <name> --from <block> --to <block> --set key=value ... --tag <exp>`
   Every agent action is a shell command that lands in the manifest. `--pipeline` is
-  required on every verb: the CLI is domain-free and has no default pipeline.
+  required on every verb but `gc`: the CLI is domain-free and has no default pipeline.
 - **Serving:** `mlpipe predict --pipeline <name> [--bundle <hash>] [--input <parquet>]`.
   Without `--input` the pipeline's optional `serve_input(log, store)` hook supplies
   the frame (Numerai: the latest live snapshot). An optional `prepare(frame, bundle)`
   hook returns `(features, ids)` (Numerai: the cleaner fill, `numerai_ticker` + `era`).
   The default selects the bundle's features and its `id_columns` (set by
   `register.id_columns`). Output: ids + `prediction`.
+- **Store hygiene:** `mlpipe gc --dry-run [--keep-days 30]` lists store files that no
+  pinned or promoted bundle's lineage, and no manifest from the window, reaches. It
+  reads every pipeline's manifests (the store is shared) and never deletes; removing
+  the listed files is a human step.
 - **Read path:** manifests (grep-able JSON), MLflow UI + MLflow MCP server for run
   comparison. Optional: generate plotly HTML comparisons from the tracking API.
 - Config typos must die at pydantic validation, not at hour six of training.

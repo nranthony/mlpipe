@@ -3,15 +3,17 @@
 **Current state (update in place; the log below is append-only):**
 - Build cycles 0–10: code complete since 2026-08-20.
 - Active work: work/0006 plan ([plan.md](../work/0006-core-library-extraction/plan.md)).
-  Phase 1 (steps 1–7b) done; phase 2 (steps 8–12) done; step 13 done bar the human
-  version bump + `v0.1.0` tag. Next: step 14 (numerai adoption) or 16 (`gc --dry-run`).
+  Steps 1–13 and 16 done; `v0.1.0` tagged. Next: step 14 (numerai adoption; numerai's
+  work/0011 v6.0 migration is done, so it is unblocked), then optional step 15.
 - Data: Numerai **v6.0** (v5.x training files are no longer served). Raw files are in
   `/workspace/raw_data/numerai/v6.0` (downloaded host-side 2026-10-20).
-- Real data: **smoke-proven only** (2026-10-20): the whole chain on 100 eras, cache-hit
-  rerun, plan `7c4df3df`, tag `smoke`. No full run on v6.0 yet; that is step 13.
-- Promoted: nothing valid. `baselines.yaml` is in the pre-ADR-0006 shape, and the
-  registry it referred to is gone (the old `store/`/`manifests/`/`mlruns/` were lost
-  before 2026-10-20; the current ones are fresh). Smoke runs are never promoted.
+- Real data: one full v6.0 run (step 13: plan `8b0a1167`, bundle `f7cc4688`), but at
+  purge 4. The example now purges 12 eras, so the next run's cvplan → register go cold
+  and its scores are not comparable with `8b0a1167`.
+- Promoted: nothing valid. `baselines.yaml` is in the pre-ADR-0006 shape (no
+  `bundle_hash`), and the registry it referred to is gone. Only `mlpipe promote` may
+  rewrite it; `gc --dry-run` reports that it roots nothing. Smoke runs are never promoted.
+- Store: 36 artifacts, 5.36 GB, all kept today by the 30-day window alone.
 
 Log:
 - 2026-08-20: Bootstrap skeleton delivered to repo root. Cycle 0 attempted; blocked
@@ -349,3 +351,21 @@ Log:
   so step 13's v6.0 OOF scores (plan `8b0a1167`: mean_corr 0.0316) carry some leakage and
   are not comparable with the next run's plan. Found while moving the numerai repo to
   v6.0 (its work/0011, ADR-0007). Config only; 120 tests green.
+- 2026-10-22 — **work/0006 step 16: `mlpipe gc --dry-run`.** Reports store files that no
+  root reaches; never deletes (without `--dry-run` it refuses, exit 2).
+  - Roots:
+    - the bundle pinned in `baselines.yaml`;
+    - every bundle a `promote` manifest names, each with its full lineage;
+    - every artifact a manifest from the last `--keep-days` days (default 30) read or
+      wrote.
+  - Hashes named inside kept JSON artifacts (a bundle's `model_hash`/`transformer_hash`)
+    are kept too.
+  - Every manifest log under `--manifests-root` counts, because the store is shared
+    across pipelines.
+  - Temp and foreign files in the store are listed, never counted as unreachable.
+  - Lives in `mlpipe/gc.py`, outside core (it only reads), so the orchestration line
+    count is unchanged at 599.
+  - Real store: 36 artifacts, 5.36 GB, 0 unreachable at 30 days. At `--keep-days 0`
+    all 36 would go: nothing is promoted under ADR-0006, so only the window keeps the
+    cache. The largest are the raw v6 train (2.18 GB) and validation (1.40 GB) snapshots.
+  - 3 new tests; 123 green, ruff clean.

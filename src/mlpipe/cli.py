@@ -1,6 +1,8 @@
 """mlpipe CLI — the single write path. Every execution lands in manifests/.
 
     mlpipe run --pipeline demo --from make_data --to summarize --set k.v=1 --tag exp
+
+`gc --dry-run` only reports store files nothing reaches; deletion is a human step.
 """
 
 from __future__ import annotations
@@ -269,6 +271,53 @@ def lineage(
     for m in log.lineage(found[0]):
         typer.echo(f"{m['step']:<20} sig={m['signature'][:8]} "
                    f"commit={(m['git_commit'] or '?')[:8]} inputs={list(m['inputs'])}")
+
+
+def _gb(paths) -> str:
+    return f"{sum(p.stat().st_size for p in paths) / 1e9:.2f} GB"
+
+
+@app.command()
+def gc(
+    dry_run: bool = typer.Option(False, "--dry-run", help="required: gc only reports"),
+    keep_days: int = typer.Option(
+        30, help="keep everything a manifest from the last N days read or wrote"
+    ),
+    store_dir: Path = typer.Option(Path("store")),
+    manifests_root: Path = typer.Option(
+        Path("manifests"), help="every manifest log under here counts (the store is shared)"
+    ),
+    baselines: Path = typer.Option(Path("baselines.yaml")),
+) -> None:
+    """Report store files that no promoted bundle, pinned baseline or recent
+    manifest reaches. Never deletes: removing the listed files is a human step."""
+    from mlpipe.gc import collect
+
+    if not dry_run:
+        raise typer.BadParameter(
+            "gc only reports; deleting is a human step. Pass --dry-run", param_hint="--dry-run"
+        )
+    r = collect(store_dir, manifests_root, baselines, keep_days)
+    gone = r.unreachable
+    pinned = ", ".join(sorted(h[:8] for h in r.bundles)) or "none"
+    typer.echo(f"store:       {len(r.files)} artifacts, {_gb(r.files.values())}")
+    typer.echo(f"roots:       bundles {pinned}; {r.window_manifests} manifests "
+               f"in the last {keep_days} days")
+    typer.echo(f"kept:        {len(r.files) - len(gone)} artifacts, "
+               f"{_gb(p for h, p in r.files.items() if h not in gone)}")
+    typer.echo(f"unreachable: {len(gone)} artifacts, {_gb(r.files[h] for h in gone)}")
+    for h in sorted(gone, key=lambda h: -r.files[h].stat().st_size):
+        typer.echo(f"  {r.files[h].stat().st_size / 1e9:6.2f} GB  {r.files[h]}  "
+                   f"({r.last_written.get(h, 'in no manifest')})")
+    if r.other_files:
+        typer.echo(f"not artifacts, left alone: {len(r.other_files)}")
+        for p in r.other_files:
+            typer.echo(f"  {p}")
+    if r.missing:
+        typer.echo(f"named by a root but absent from the store: {len(r.missing)}")
+    for note in r.notes:
+        typer.echo(f"note: {note}")
+    typer.echo("dry run: nothing deleted. Removing the unreachable files is a human step.")
 
 
 if __name__ == "__main__":
