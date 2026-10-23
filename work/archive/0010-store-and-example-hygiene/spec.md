@@ -1,6 +1,7 @@
 # 0010 spec — Store, registry and Numerai-example hygiene
 
-- Status: **Built 2026-10-23** (go-ahead from Neil the same day). No item here is a
+- Status: **Done 2026-10-23** (go-ahead from Neil the same day). Baseline run: plan
+  `8b92bc2c`, bundle `1d3c948c` (STATUS.md). No item here is a
   wrong-result bug in mlpipe itself; each is cheap and makes the next host adoption or
   real-data run less surprising. Shipped after [work/0008](../archive/0008-cache-correctness/spec.md).
 - Changed while building:

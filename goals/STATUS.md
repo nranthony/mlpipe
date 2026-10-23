@@ -5,17 +5,18 @@
 - Active work: work/0006 plan ([plan.md](../work/0006-core-library-extraction/plan.md)).
   Steps 1–13 and 16 done. `v0.2.0` tagged (work/0008, cache and provenance
   correctness; archived). Step 14 (numerai adoption, pinned to `v0.2.0`) is unblocked
-  and driven from the numerai side (its work/0012 review). Next here: work/0009 (live
-  identity, serve pipeline), work/0010 (hygiene), optional step 15.
+  and driven from the numerai side (its work/0012 review). work/0010 (hygiene) built
+  and archived. Next here: work/0009 (live identity, serve pipeline), optional step 15.
 - Data: Numerai **v6.0** (v5.x training files are no longer served). Raw files are in
   `/workspace/raw_data/numerai/v6.0` (downloaded host-side 2026-10-20).
-- Real data: one full v6.0 run (step 13: plan `8b0a1167`, bundle `f7cc4688`), but at
-  purge 4. The example now purges 12 eras, so the next run's cvplan → register go cold
-  and its scores are not comparable with `8b0a1167`.
+- Real data: the example's comparable baseline is the 2026-10-23 v6.0 run (work/0010):
+  plan `8b92bc2c`, bundle `1d3c948c`, purge 12, `numerai_corr` scorer, `val_*` skipping
+  12 boundary eras. OOF mean_corr 0.0305 (sharpe 1.92), val_mean_corr 0.0193 (sharpe
+  1.11). The step-13 run (plan `8b0a1167`, purge 4, rank-Pearson) is not comparable.
 - Promoted: nothing valid. `baselines.yaml` is in the pre-ADR-0006 shape (no
   `bundle_hash`), and the registry it referred to is gone. Only `mlpipe promote` may
   rewrite it; `gc --dry-run` reports that it roots nothing. Smoke runs are never promoted.
-- Store: 36 artifacts, 5.36 GB, all kept today by the 30-day window alone.
+- Store: 44 artifacts, 5.45 GB, all kept today by the 30-day window alone.
 - Known issue (found 2026-10-22, not fixed): the Numerai example never refreshes
   `live.parquet`. `fetch` skips an existing file, and ingest's signature is
   `{version}` + code, so `predict` scores stale live rows. Size + mtime in the signature
@@ -453,3 +454,15 @@ Log:
   - Orchestration modules at 698 lines; the store's streamed path is the addition, and
     it is the store's own job.
   - 13 new tests; 152 green, ruff clean.
+- 2026-10-23 — **work/0010 baseline run (full v6.0, CLI).** Plan `8b92bc2c`, bundle
+  `1d3c948c`, 28 min (train 27 min). Every step cold, as expected after v0.2.0's
+  `CORE_SIGNATURE_VERSION`; rerun fully `cached` in 2.7 s.
+  - Raw snapshots kept their 2026-10-21 hashes (`bbfd61b4`, `a91d5f0e`): the streamed
+    store hashes real 2 GB files exactly as the in-memory path did.
+  - Metrics (`numerai_corr`): OOF mean_corr 0.0305, sharpe 1.92, max drawdown 0.107,
+    exposure 0.250 over 835 eras. Validation (12 boundary eras skipped) mean_corr
+    0.0193, sharpe 1.11, max drawdown 0.284, exposure 0.302 over 382 eras.
+  - Not comparable with step 13's `8b0a1167` (purge 4, rank-Pearson): no winner.
+  - Manifests record `environment.mlpipe.dirty: true` (the human's uncommitted
+    `.vscode/settings.json`) and version 0.0.1 (stale sandbox metadata).
+  - work/0010 archived.
