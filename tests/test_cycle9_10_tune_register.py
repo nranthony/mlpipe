@@ -89,7 +89,7 @@ def promote(tmp, dirs, bundle):
         app, ["promote", bundle, *dirs, "--baselines", str(tmp / "baselines.yaml")]
     )
     assert result.exit_code == 0, result.output
-    return yaml.safe_load((tmp / "baselines.yaml").read_text())["promoted"]
+    return yaml.safe_load((tmp / "baselines.yaml").read_text())["numerai"]["champion"]
 
 
 def test_cycle10_register_builds_bundle_without_registering(env):

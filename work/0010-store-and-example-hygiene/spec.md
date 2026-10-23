@@ -1,8 +1,22 @@
 # 0010 spec — Store, registry and Numerai-example hygiene
 
-- Status: **Draft — awaiting sign-off.** No item here is a wrong-result bug in mlpipe
-  itself; each is cheap and makes the next host adoption or real-data run less
-  surprising. Ship in any order, after [work/0008](../archive/0008-cache-correctness/spec.md).
+- Status: **Built 2026-10-23** (go-ahead from Neil the same day). No item here is a
+  wrong-result bug in mlpipe itself; each is cheap and makes the next host adoption or
+  real-data run less surprising. Shipped after [work/0008](../archive/0008-cache-correctness/spec.md).
+- Changed while building:
+  - Item 1 copies, never hard-links. A link shares the inode with the download, and a
+    source rewritten in place (work/0009's stale live file) would silently change a
+    stored artifact. One streamed pass copies and hashes, so RAM stays flat; the disk
+    copy remains.
+  - Item 3 **dropped**, measured: `entries()` takes 0.55 ms on the real 74-entry log
+    and ~100 ms on a synthetic 10,000-entry one. That is noise next to any step;
+    revisit if a log passes ~100k entries.
+  - Item 6 also applies to clean's `era_slice` (same first-appearance order).
+  - Item 7 is in the example's `EvaluateStep` (the only era-wise evaluate); the generic
+    `TabularEvalStep` keeps its fixed metrics. The port uses stdlib `NormalDist`, so
+    no scipy dependency; a test matches it to a scipy reference to 1e-6.
+  - The legacy `promoted:` block in `baselines.yaml` is left as written: it pins
+    nothing, and removing it is a human call.
 - Origin: numerai `work/0012-ml-core-review`. The review's P2-11 and P1-10 cover the
   store, registry and gc items. Its `reviews/datascience.md` §1d, §2 and P2-13 cover the
   example items. All were re-checked here 2026-10-22.

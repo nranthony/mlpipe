@@ -328,7 +328,7 @@ def test_work0006_promote_accepts_a_bundle_without_plan_or_target(tmp_path):
         str(tmp_path / "store"), "--manifests-dir", str(tmp_path / "m"), "--baselines", str(baselines),
     ])
     assert result.exit_code == 0, result.output
-    pinned = yaml.safe_load(baselines.read_text())["promoted"]
+    pinned = yaml.safe_load(baselines.read_text())["demo"]["champion"]
     assert pinned["plan_hash"] is None and pinned["target"] is None
     assert pinned["metrics"] == {"rmse": 1.0}
 

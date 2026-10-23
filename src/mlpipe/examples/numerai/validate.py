@@ -114,7 +114,6 @@ def check_table(
 
     report = {
         "rows": stats["rows"],
-        "previous_rows": prev_rows,
         "era_monotonic": bool(stats["era_monotonic"]),
         "max_feature_null_frac": null_frac,
         "max_feature_null_frac_by_dtype": null_fracs,
@@ -151,4 +150,7 @@ class ValidateStep(Step):
         outs = {out: ctx.put_alias(out, raw) for raw, out in PASS_THROUGH.items()}
         outs["validation_report"] = ctx.put(report, "validation_report", ext="json")
         ctx.log_meta("rows", {k: report[k]["rows"] for k in PASS_THROUGH})
+        # history, not content: in the report it would make identical inputs
+        # produce different report bytes
+        ctx.log_meta("previous_rows", {k: prev_rows.get(k) for k in PASS_THROUGH})
         return StepResult(outputs=outs)

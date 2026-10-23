@@ -14,6 +14,7 @@ from pydantic import Field
 
 from mlpipe.core.config import StrictConfig
 from mlpipe.core.interfaces import Step, StepResult
+from mlpipe.steps.cvplan import era_order
 
 
 class BaselineCleanConfig(StrictConfig):
@@ -55,7 +56,7 @@ class CleanConfig(StrictConfig):
 def slice_eras(lf: pl.LazyFrame, cut: EraSlice | None) -> pl.LazyFrame:
     if cut is None:
         return lf
-    eras = lf.select(pl.col("era").unique(maintain_order=True)).collect()["era"].to_list()
+    eras = era_order(lf.select(pl.col("era").unique()).collect()["era"].to_list())
     keep = {"tail": eras[-cut.n:], "head": eras[: cut.n], "stride": eras[:: cut.n]}[cut.mode]
     return lf.filter(pl.col("era").is_in(keep))
 

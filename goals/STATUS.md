@@ -429,3 +429,27 @@ Log:
   - 16 new tests; 139 green, ruff clean.
 - 2026-10-23 — **v0.2.0 released.** Human ran `uv lock` (`51d0b94`), tagged `v0.2.0`
   and pushed. work/0008 archived; work/0006 step 14 unblocked (numerai pins `v0.2.0`).
+- 2026-10-23 — **work/0010 built: store, registry and example hygiene.**
+  - Store: a `Path` snapshot is copied and hashed in one streamed pass (8 MiB chunks),
+    not read whole into RAM. It is not hard-linked: the store is immutable and a
+    download can be rewritten in place. Same bytes, same hash, so no signature moves.
+  - `baselines.yaml` is keyed `{pipeline: {alias: pin}}` (`mlpipe/baselines.py`).
+    `promote` writes only its slot; `predict --alias` reads one; `gc` roots every pin.
+    The legacy `promoted:` block stays as written and pins nothing.
+  - `gc --root-file` takes any text naming bundle hashes (a host's champion record).
+    DESIGN.md says a host promoting by its own gate should leave a `promote` manifest.
+  - Index lookup (item 3) dropped after measuring: 0.55 ms on the real log, ~100 ms at
+    10,000 entries.
+  - Numerai example:
+    - validate's `previous_rows` moved from the report to manifest meta;
+    - `cvplan` and clean's `era_slice` sort eras into time order (pinned plan hash
+      unchanged for already-sorted input);
+    - `evaluate.scorer` takes a `module:function` path, declared via `code_deps`; the
+      example config uses a stdlib `numerai_corr` port (matches scipy to 1e-6);
+    - `val_*` metrics skip the first `purge_eras` validation eras (label overlap with
+      the full fit), listed as `val_skipped_eras` in the report.
+  - Numerai signatures from validate down move (code edits); the next real run
+    recomputes from there.
+  - Orchestration modules at 698 lines; the store's streamed path is the addition, and
+    it is the store's own job.
+  - 13 new tests; 152 green, ruff clean.

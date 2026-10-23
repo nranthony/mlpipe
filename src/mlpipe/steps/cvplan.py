@@ -26,8 +26,17 @@ class CVConfig(StrictConfig):
     era_column: str = "era"
 
 
+def era_order(values: list) -> list:
+    """Eras in time order, whatever order the rows arrive in: folds must be
+    contiguous in time or purging is silently wrong. ISO dates and zero-padded
+    ids sort as strings; `(len, str)` also puts unpadded ids in order ("2" < "10")."""
+    if all(isinstance(v, str) for v in values):
+        return sorted(values, key=lambda v: (len(v), v))
+    return sorted(values)
+
+
 def build_plan(eras: pl.Series, cfg: CVConfig) -> FoldPlan:
-    unique = eras.unique(maintain_order=True).to_list()
+    unique = era_order(eras.unique().to_list())
     order = {era: i for i, era in enumerate(unique)}
     era_idx = eras.replace_strict(order, return_dtype=pl.Int32).to_numpy()
 

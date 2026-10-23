@@ -1,8 +1,10 @@
 """Store garbage report (work/0006 step 16): which store files no root reaches.
 
 Reports only; deleting is a human step. Roots:
-- the bundle pinned in baselines.yaml and every bundle a `promote` manifest names
-  (ADR-0006), each with its full lineage;
+- every bundle pinned in baselines.yaml (any pipeline, any alias), every bundle a
+  `promote` manifest names (ADR-0006), and every hash in a `--root-file` (a host
+  that promotes by its own gate keeps its champion record in git), each with its
+  full lineage;
 - every artifact a manifest from the last `keep_days` days read or wrote, so the
   recent cache stays warm.
 Kept JSON artifacts are scanned for store hashes they name (a bundle's model_hash
@@ -18,8 +20,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import yaml
-
+from mlpipe import baselines as baselines_file
 from mlpipe.core.manifest import ManifestLog
 
 HASH = re.compile(r"[0-9a-f]{64}")
@@ -29,7 +30,7 @@ HASH = re.compile(r"[0-9a-f]{64}")
 class GcReport:
     files: dict[str, Path]  # hash -> path, every artifact in the store
     kept: set[str]
-    bundles: set[str]  # pinned + promoted model bundles
+    bundles: set[str]  # pinned, promoted and root-file hashes, kept with their lineage
     window_manifests: int
     last_written: dict[str, str]  # hash -> "step date" of its latest producer
     other_files: list[Path] = field(default_factory=list)  # temp writes, foreign files
@@ -48,6 +49,7 @@ class GcReport:
 def _scan_store(root: Path) -> tuple[dict[str, Path], list[Path]]:
     files: dict[str, Path] = {}
     other: list[Path] = []
+    other += sorted(p for p in root.glob("*") if p.is_file())  # e.g. an interrupted snapshot
     for path in sorted(root.glob("*/*")):
         stem = path.name.split(".")[0]
         if path.is_file() and HASH.fullmatch(stem) and path.parent.name == stem[:2]:
@@ -62,14 +64,25 @@ def _logs(root: Path) -> list[ManifestLog]:
     return [ManifestLog(d) for d in dirs if (d / "index.jsonl").exists()]
 
 
-def _pinned_bundle(baselines: Path, notes: list[str]) -> str | None:
+def _pinned_bundles(baselines: Path, notes: list[str]) -> set[str]:
     if not baselines.exists():
         notes.append(f"no {baselines}: no pinned bundle")
-        return None
-    pinned = (yaml.safe_load(baselines.read_text()) or {}).get("promoted") or {}
-    if not pinned.get("bundle_hash"):
-        notes.append(f"{baselines} pins no bundle_hash (written before ADR-0006); it roots nothing")
-    return pinned.get("bundle_hash")
+        return set()
+    found = {pin["bundle_hash"] for pin in baselines_file.pins(baselines_file.load(baselines)).values()}
+    if not found:
+        notes.append(f"{baselines} pins no bundle_hash (nothing promoted since ADR-0006); "
+                     "it roots nothing")
+    return found
+
+
+def _root_file_hashes(paths: list[Path], notes: list[str]) -> set[str]:
+    found: set[str] = set()
+    for path in paths:
+        hashes = set(HASH.findall(path.read_text()))
+        if not hashes:
+            notes.append(f"root file {path} names no 64-hex hash")
+        found |= hashes
+    return found
 
 
 def _when(m: dict) -> datetime | None:
@@ -93,6 +106,7 @@ def collect(
     baselines: Path,
     keep_days: int,
     now: datetime | None = None,
+    root_files: list[Path] = (),
 ) -> GcReport:
     files, other = _scan_store(store_root)
     notes: list[str] = []
@@ -105,9 +119,7 @@ def collect(
     bundles: set[str] = set()
     last_written: dict[str, str] = {}
     window = 0
-    pinned = _pinned_bundle(baselines, notes)
-    if pinned:
-        bundles.add(pinned)
+    bundles |= _pinned_bundles(baselines, notes) | _root_file_hashes(list(root_files), notes)
     for log in logs:
         for m in log.entries():
             if m["step"] == "promote" and m["status"] == "promoted":

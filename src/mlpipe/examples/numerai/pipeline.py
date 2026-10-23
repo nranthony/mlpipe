@@ -54,7 +54,11 @@ DEFAULT_CONFIG = {
         },
         "target": "target",
     },
-    "evaluate": {"target": "target"},
+    # numerai_corr, not rank-Pearson: ranks models the way the payout does
+    "evaluate": {
+        "target": "target",
+        "scorer": "mlpipe.examples.numerai.eval_metrics:numerai_corr_scores",
+    },
     "register": {"model_name": "numerai-lgbm"},
     "tracker": {"kind": "mlflow", "uri": "sqlite:///mlruns/mlflow.db", "experiment": "numerai"},
     "tune": {

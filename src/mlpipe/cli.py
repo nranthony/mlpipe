@@ -152,9 +152,11 @@ def promote(
 ) -> None:
     """The only way to promote (ADR-0006). Pins the bundle in baselines.yaml with
     the config every lineage step actually ran with, moves the MLflow alias, and
-    leaves a manifest. baselines.yaml is the source of truth; the alias is a view."""
+    leaves a manifest. baselines.yaml is the source of truth; the alias is a view.
+    The pin goes in the (pipeline, alias) slot; other slots are left as they are."""
     from datetime import UTC, datetime
 
+    from mlpipe.baselines import write_pin
     from mlpipe.core.interfaces import Artifact
     from mlpipe.core.manifest import ManifestLog, git_commit
 
@@ -185,7 +187,7 @@ def promote(
         "metrics": content.get("metrics", {}), "steps": steps,
         "promoted_at": now, "git_commit": git_commit(),
     }
-    baselines.write_text(yaml.safe_dump({"promoted": pinned}, sort_keys=True))
+    write_pin(baselines, pipeline, alias, pinned)
     log.write({
         "step": "promote", "status": "promoted", "signature": f"promote:{alias}:{full}",
         "inputs": {"model_bundle": full}, "outputs": {}, "metrics": {},
@@ -193,7 +195,7 @@ def promote(
         "git_commit": pinned["git_commit"], "started_at": now, "ended_at": now,
     })
     typer.echo(f"promoted {name}@{alias} -> bundle {full[:8]} (plan {(plan_hash or '-')[:8]}, "
-               f"registry v{version}) -> {baselines}")
+               f"registry v{version}) -> {baselines} [{pipeline}.{alias}]")
 
 
 def _default_prepare(frame, bundle: dict):
@@ -204,6 +206,7 @@ def _default_prepare(frame, bundle: dict):
 @app.command()
 def predict(
     bundle: str = typer.Option(None, help="model_bundle hash/prefix (default: baselines.yaml)"),
+    alias: str = typer.Option("champion", help="baselines.yaml slot to serve when no --bundle"),
     pipeline: str = PIPELINE,
     input_: Path = typer.Option(
         None, "--input", help="parquet to score (default: the pipeline's serve_input hook)"
@@ -220,6 +223,7 @@ def predict(
     and `prepare(frame, bundle) -> (features, ids)`; the output is ids + prediction."""
     import polars as pl
 
+    from mlpipe.baselines import pinned
     from mlpipe.core.manifest import ManifestLog
 
     module = _module(pipeline)
@@ -227,13 +231,13 @@ def predict(
     if bundle:
         bundle_hash = _resolve_bundle(log, bundle)
     else:
-        pinned = (yaml.safe_load(baselines.read_text()) or {}) if baselines.exists() else {}
-        bundle_hash = pinned.get("promoted", {}).get("bundle_hash")
-        if not bundle_hash:
+        pin = pinned(baselines, pipeline, alias)
+        if not pin:
             raise typer.BadParameter(
-                f"no --bundle and no promoted bundle in {baselines} "
-                "(missing, or written before ADR-0006); run `mlpipe promote` first"
+                f"no --bundle and no {pipeline}.{alias} pin in {baselines}; "
+                "run `mlpipe promote` first"
             )
+        bundle_hash = pin["bundle_hash"]
     content = store.load(bundle_hash)
 
     if input_ is not None:
@@ -288,16 +292,19 @@ def gc(
         Path("manifests"), help="every manifest log under here counts (the store is shared)"
     ),
     baselines: Path = typer.Option(Path("baselines.yaml")),
+    root_file: list[Path] = typer.Option(
+        None, "--root-file", help="file naming bundle hashes to keep (e.g. a host's champion record)"
+    ),
 ) -> None:
-    """Report store files that no promoted bundle, pinned baseline or recent
-    manifest reaches. Never deletes: removing the listed files is a human step."""
+    """Report store files that no promoted bundle, pinned baseline, root file or
+    recent manifest reaches. Never deletes: removing the listed files is a human step."""
     from mlpipe.gc import collect
 
     if not dry_run:
         raise typer.BadParameter(
             "gc only reports; deleting is a human step. Pass --dry-run", param_hint="--dry-run"
         )
-    r = collect(store_dir, manifests_root, baselines, keep_days)
+    r = collect(store_dir, manifests_root, baselines, keep_days, root_files=root_file or [])
     gone = r.unreachable
     pinned = ", ".join(sorted(h[:8] for h in r.bundles)) or "none"
     typer.echo(f"store:       {len(r.files)} artifacts, {_gb(r.files.values())}")

@@ -48,7 +48,9 @@ from a pinned git tag (ADR-0005); Numerai is its real-data example and test case
 
 **Artifact** — any persisted output: a parquet table, a joblib'd transformer, a model
 file, a fold plan, a metrics JSON. Addressed by the SHA-256 of its serialized bytes.
-Stored at `store/<hash[:2]>/<hash>.<ext>`. Immutable, deduplicated.
+Stored at `store/<hash[:2]>/<hash>.<ext>`. Immutable, deduplicated. A file snapshot
+(a download) is copied and hashed in one streamed pass, never read whole into memory
+and never hard-linked (the source may be rewritten in place).
 
 **Step** — a named, pure function from named input artifacts to named output artifacts.
 Declares `inputs: list[str]` and `outputs: list[str]` (artifact keys). Never touches the
@@ -94,21 +96,25 @@ appears as an input hash in some later manifest → the lineage graph is implici
 walkable from any model back to raw data + config + commit.
 
 **Promotion** — accepting a run, only via `mlpipe promote <bundle-hash>` (ADR-0006):
-moves the MLflow `@champion` alias and writes `baselines.yaml` with the config each
-lineage step ran with, config/plan/bundle hashes, metrics and commit. `predict` serves
-the pinned bundle. The next iteration cycle builds on the pinned baseline.
+moves the MLflow alias and writes the `baselines.yaml` slot `{pipeline: {alias: pin}}`
+with the config each lineage step ran with, config/plan/bundle hashes, metrics and
+commit. Other slots are left alone. `predict --alias` (default `champion`) serves the
+pinned bundle. The next iteration cycle builds on the pinned baseline. A host that
+promotes by its own gate keeps its record but should still leave a `promote` manifest
+(`{"step": "promote", "status": "promoted", "inputs": {"model_bundle": <hash>}}`), or
+pass that record to `gc --root-file`, so the champion's lineage stays a gc root.
 
 ## 2. Pipeline blocks (each = one Claude Code cycle)
 
 | # | Block | Contract (inputs → outputs) | Notes |
 |---|-------|------------------------------|-------|
 | 1 | Ingest & snapshot | source config → `raw_train`, `raw_validation`, `raw_live`, `features_meta` | numerapi pull into the shared download cache, freeze exact bytes, hash. Record dataset name/version/size in the manifest. |
-| 2 | Validate | raw tables → `validated_*` (zero-copy aliases) + `validation_report` | pandera schemas: columns, the configured era column, feature dtypes against an allow-list, per-dtype null bounds, era monotonicity, row counts vs previous snapshot. Hard gate — fail loud. |
+| 2 | Validate | raw tables → `validated_*` (zero-copy aliases) + `validation_report` | pandera schemas: columns, the configured era column, feature dtypes against an allow-list, per-dtype null bounds, era monotonicity, row counts vs previous snapshot. Hard gate — fail loud. The report holds content only; the previous row counts it compared against go in manifest meta. |
 | 3 | Clean & transform | validated → `clean_table` + `clean_validation` + `serve_recipe` | Stateless only. `serve_recipe` (cleaner + source era column) is what serving replays on live rows; register takes it as an input. Renames the source's era column to the canonical `era` (v6.0: `date`) and drops `exclude_features`, so nothing downstream knows source names. Same input ⇒ same output. Polars exprs; validation cleaned with the same exprs so downstream skew checks have a target. |
 | 4 | Feature engineering | clean → `feature_table` + `feature_validation` + `fitted_transformer` | Fitted transforms learn from train only and are **unsupervised**: `fit` sees the feature matrix, never the target. A target-aware transform (target encoding, supervised selection) fitted here would leak across CV folds, so it fits per fold inside the ModelBackend instead. The transformer is a versioned artifact that travels with the model; `feature_validation` is what the skew guard compares against. |
-| 5 | Split / CV plan | feature table + cv config → `fold_plan` | Era-aware, purged, embargoed. The plan is an artifact with its own hash; model comparisons must cite the same plan hash. The `FoldPlan` type is domain-free (`folds`, `plan_hash`, `group_column`, `meta`): era, purge and embargo are this step's semantics and travel in `meta`. Generic alternative for the same slot: `GroupKFoldStep` (`steps/groupcv.py`; a group never straddles a split; no group column = shuffled row k-fold). |
+| 5 | Split / CV plan | feature table + cv config → `fold_plan` | Era-aware, purged, embargoed. Eras are sorted into time order (ISO dates and padded ids as strings, `(len, str)` for unpadded ids), never taken in row order. The plan is an artifact with its own hash; model comparisons must cite the same plan hash. The `FoldPlan` type is domain-free (`folds`, `plan_hash`, `group_column`, `meta`): era, purge and embargo are this step's semantics and travel in `meta`. Generic alternative for the same slot: `GroupKFoldStep` (`steps/groupcv.py`; a group never straddles a split; no group column = shuffled row k-fold). |
 | 6 | Train & tune | features + fold_plan + model config → `model`, `oof_preds` | Via ModelBackend port. `model` is a `{full, fold_models}` bundle so stored state alone reproduces OOF (5x size, no retraining needed for audit). Optuna via `mlpipe tune`. |
-| 7 | Evaluate | model + oof_preds + fold_plan + feature_validation → `eval_report` + `eval_chart` (metrics JSON + standalone plotly HTML) | Era-wise corr, sharpe, drawdown, feature exposure — for OOF (`mean_corr`, …) and for the full model on the validation holdout (`val_mean_corr`, …), side by side. Eras with unresolved targets are skipped. Log metrics to MLflow. Generic alternative for the same slot: `TabularEvalStep` (`task: regression` → rmse, mae, r2, corr; `task: binary` → roc_auc, pr_auc, log_loss, brier, accuracy, which need probabilities, so use a classifier backend such as `lightgbm_binary` whose `predict` returns P(y=1)). |
+| 7 | Evaluate | model + oof_preds + fold_plan + feature_validation → `eval_report` + `eval_chart` (metrics JSON + standalone plotly HTML) | Era-wise corr, sharpe, drawdown, feature exposure — for OOF (`mean_corr`, …) and for the full model on the validation holdout (`val_mean_corr`, …), side by side. Eras with unresolved targets are skipped, and so are the first `purge_eras` validation eras, whose labels overlap the full model's last train eras (`val_skipped_eras` in the report). The per-era scorer is configured by import path (`evaluate.scorer: "pkg.mod:fn"`, declared via `code_deps`); the step default is rank-Pearson, the Numerai example uses a `numerai_corr` port. Payout-accurate scoring (NCORR, MMC) is the host's job. A host's frozen holdout must never be the input of a cached step: every run would spend it. Log metrics to MLflow. Generic alternative for the same slot: `TabularEvalStep` (`task: regression` → rmse, mae, r2, corr; `task: binary` → roc_auc, pr_auc, log_loss, brier, accuracy, which need probabilities, so use a classifier backend such as `lightgbm_binary` whose `predict` returns P(y=1)). |
 | 8 | Register & package | model + transformer + eval → `model_bundle` | The bundle holds model + fitted transformer + feature list + plan hash, plus the serving recipe when the pipeline declares one (`RegisterStep(recipe="serve_recipe")`: Numerai's clean emits the fill and source era column as an artifact). Registry versions are created only by `mlpipe promote` (ADR-0006). |
 
 The stateless/stateful boundary between blocks 3 and 4 is deliberate: block 3 caches on
@@ -160,14 +166,15 @@ protocol. Plotting/metrics hide behind plain functions, not classes.
   `mlpipe run --pipeline <name> --from <block> --to <block> --set key=value ... --tag <exp>`
   Every agent action is a shell command that lands in the manifest. `--pipeline` is
   required on every verb but `gc`: the CLI is domain-free and has no default pipeline.
-- **Serving:** `mlpipe predict --pipeline <name> [--bundle <hash>] [--input <parquet>]`.
+- **Serving:** `mlpipe predict --pipeline <name> [--bundle <hash> | --alias <slot>] [--input <parquet>]`.
   Without `--input` the pipeline's optional `serve_input(log, store)` hook supplies
   the frame (Numerai: the latest live snapshot). An optional `prepare(frame, bundle)`
   hook returns `(features, ids)` (Numerai: the cleaner fill, `numerai_ticker` + `era`).
   The default selects the bundle's features and its `id_columns` (set by
   `register.id_columns`). Output: ids + `prediction`.
-- **Store hygiene:** `mlpipe gc --dry-run [--keep-days 30]` lists store files that no
-  pinned or promoted bundle's lineage, and no manifest from the window, reaches. It
+- **Store hygiene:** `mlpipe gc --dry-run [--keep-days 30] [--root-file <path>]` lists
+  store files that no pinned, promoted or root-file bundle's lineage, and no manifest
+  from the window, reaches. A root file is any text naming 64-hex hashes. It
   reads every pipeline's manifests (the store is shared) and never deletes; removing
   the listed files is a human step.
 - **Read path:** manifests (grep-able JSON), MLflow UI + MLflow MCP server for run

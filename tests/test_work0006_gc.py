@@ -51,7 +51,7 @@ def test_work0006_gc_keeps_promoted_lineage_and_what_a_bundle_names(tmp_path):
     assert {a.content_hash for a in (raw, model, side, bundle)} <= r.kept
     assert r.other_files == [tmp] and r.missing == set()
     assert r.last_written[stale.content_hash] == "make 2020-01-01"
-    assert any("before ADR-0006" in n for n in r.notes)
+    assert any("roots nothing" in n for n in r.notes)
 
 
 def test_work0006_gc_retention_window_keeps_recent_manifests(tmp_path):
