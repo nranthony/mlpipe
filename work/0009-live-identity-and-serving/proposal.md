@@ -1,10 +1,13 @@
 # Proposal: Live-data identity and a serve pipeline with lineage
 
-- Status: In review → [ADR-0007](../../docs/adr/0007-live-data-identified-by-round.md) (Proposed 2026-10-23)
+- Status: In review → [ADR-0007](../../docs/adr/0007-serve-pipeline-and-named-inputs.md) (Proposed 2026-10-23)
 - Author: Claude, from numerai `work/0012-ml-core-review` §5 (P0-2, P1-18; mlops C9, C14,
   C15), re-checked here 2026-10-22
-- Decision on acceptance: ADR-0007 "Live data is identified by round" (review D4). The
-  ADR resolves both open questions below: `--input` stays; past rounds are a host check.
+- Decision on acceptance: ADR-0007 "Serving is a pipeline; inputs that change over time
+  are named in config" (review D4). The ADR splits library decisions from the Numerai
+  example's, and resolves both open questions below: `--input` stays; past rounds are a
+  host check. It also replaces the 2026-10-23 draft's file move: the download folder is
+  shared, so the example only adds paths to it.
 
 ## Summary
 

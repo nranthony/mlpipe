@@ -1,6 +1,7 @@
 # ADR-0008: Copier scaffolding template, versioned with the library
 
-- Status: Proposed
+- Status: Accepted 2026-10-23 (nanthony). Copier installed as a host tool; the
+  `template` extra locked in `f5f0ee0`.
 - Date: 2026-10-23
 - Deciders: nanthony + Claude (work/0006 step 15; blueprint in work/0007 "Template
   Architecture")

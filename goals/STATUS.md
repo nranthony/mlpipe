@@ -6,8 +6,9 @@
   Steps 1–13 and 16 done. `v0.2.0` tagged (work/0008, cache and provenance
   correctness; archived). Step 14 (numerai adoption, pinned to `v0.2.0`) is unblocked
   and driven from the numerai side (its work/0012 review). work/0010 (hygiene) built
-  and archived. In review: ADR-0007 (work/0009, live identity and serving) and
-  ADR-0008 (optional step 15, Copier template), both Proposed 2026-10-23.
+  and archived. In review: ADR-0007 (work/0009, serve pipeline and inputs named in
+  config; Proposed 2026-10-23). ADR-0008 (optional step 15, Copier template) accepted
+  2026-10-23; the template waits for step 14's first cache hit.
 - Data: Numerai **v6.0** (v5.x training files are no longer served). Raw files are in
   `/workspace/raw_data/numerai/v6.0` (downloaded host-side 2026-10-20).
 - Real data: the example's comparable baseline is the 2026-10-23 v6.0 run (work/0010):
@@ -475,3 +476,14 @@ Log:
   ADR-0008 pins `copier==9.18.2` (newest before the 2026-09-21 cutoff; copier-org, MIT),
   keeps the template in this repo under `template/`, forbids tasks, migrations and Jinja
   extensions, and builds it after numerai's step 14 shows its first cache hit.
+- 2026-10-23 — **ADR-0008 accepted; ADR-0007 reworked.**
+  - ADR-0008: the human installed Copier as a host tool, locked the `template` extra
+    (`f5f0ee0`) and synced `.venv-sandbox` (now mlpipe 0.2.0, copier 9.18.2).
+  - ADR-0007 is renamed `0007-serve-pipeline-and-named-inputs.md` and split into
+    library decisions (inputs that change over time are named in config; serving is a
+    pipeline; `run_id`) and Numerai-example decisions (round, snapshot date, freshness).
+  - The draft's move of the v6.0 files into `v6.0/2026-10-20/` is dropped. The download
+    folder is shared with the numerai repo, which reads the flat paths. The example now
+    only adds paths there.
+  - The past-round check failed on the host with `No module named 'numerapi'`: the
+    host `.venv` has base deps only, and numerapi is in the `data` extra.
