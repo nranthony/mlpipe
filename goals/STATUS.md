@@ -6,9 +6,9 @@
   Steps 1–13 and 16 done. `v0.2.0` tagged (work/0008, cache and provenance
   correctness; archived). Step 14 (numerai adoption, pinned to `v0.2.0`) is unblocked
   and driven from the numerai side (its work/0012 review). work/0010 (hygiene) built
-  and archived. In review: ADR-0007 (work/0009, serve pipeline and inputs named in
-  config; Proposed 2026-10-23). ADR-0008 (optional step 15, Copier template) accepted
-  2026-10-23; the template waits for step 14's first cache hit.
+  and archived. Accepted 2026-10-23: ADR-0007 (work/0009, serve pipeline and inputs
+  named in config; spec next) and ADR-0008 (optional step 15, Copier template; waits
+  for step 14's first cache hit).
 - Data: Numerai **v6.0** (v5.x training files are no longer served). Raw files are in
   `/workspace/raw_data/numerai/v6.0` (downloaded host-side 2026-10-20).
 - Real data: the example's comparable baseline is the 2026-10-23 v6.0 run (work/0010):
@@ -487,3 +487,10 @@ Log:
     only adds paths there.
   - The past-round check failed on the host with `No module named 'numerapi'`: the
     host `.venv` has base deps only, and numerapi is in the `data` extra.
+- 2026-10-23 — **ADR-0007 accepted.**
+  - Past-round check, on the host with `--extra data`: during round 1383,
+    `round_num=1378` returned a 4.44 MB live file dated `2026-10-15`. Past rounds are
+    served, so backfills can be rebuilt.
+  - That result changed decision 6. A freshness check against the fetch time would
+    fail every backfill (8 days old here). It now compares against the round's
+    `openTime`, which `ingest_live` records when it fetches.

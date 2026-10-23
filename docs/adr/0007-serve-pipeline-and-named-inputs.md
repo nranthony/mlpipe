@@ -1,6 +1,7 @@
 # ADR-0007: Serving is a pipeline; inputs that change over time are named in config
 
-- Status: Proposed
+- Status: Accepted 2026-10-23 (nanthony). Decision 6 amended on acceptance: the
+  freshness check compares against the round's open time, not the fetch time.
 - Date: 2026-10-23
 - Deciders: nanthony + Claude (work/0009; findings from an external review of the core,
   numerai `work/0012-ml-core-review` D4, P0-2, P1-18, mlops C9/C14/C15)
@@ -60,10 +61,13 @@ snapshot any run wrote ("latest ever"), whatever its round or tag.
    path `<download_dir>/<version>/<snapshot>/`. `validation.parquet` gains targets as
    they resolve, so the date says which copy a run used. A snapshot folder that doesn't
    exist yet is downloaded on first use.
-6. **Freshness check at fetch time.** `validate_live` fails if the live frame's era
-   date is more than 7 days before the fetch time `ingest_live` records. This catches
-   a server returning an old file for the requested round. On a cache hit nothing is
-   fetched, so nothing is checked: that is correct, because the round is pinned.
+6. **Freshness check against the round.** When `ingest_live` fetches, it also records
+   the round's `openTime` (numerapi `get_competitions`) in its meta. `validate_live`
+   fails if the live frame's era date is more than 7 days before that open time. This
+   catches a server returning the wrong file for the requested round, and it holds for
+   a past round fetched today (a check against the fetch time would fail every
+   backfill). On a cache hit nothing is fetched, so nothing is checked: that is
+   correct, because the round is pinned.
 7. **The download folder may be shared**, so the example only adds paths to it. It
    never moves, rewrites or deletes a file it didn't create. Existing files at the old
    flat paths (`<version>/train.parquet`, `<version>/live.parquet`, …) are left alone.
@@ -87,11 +91,10 @@ snapshot any run wrote ("latest ever"), whatever its round or tag.
 
 ## Open, to check before building
 
-- **Past rounds:** does `download_dataset("v6.0/live.parquet", …, round_num=<a past
-  round>)` return that round's file? Checked 2026-10-23: numerapi's client sends
-  `round` to the server's `dataset` query; whether the server honours it for live is
-  unverified. It decides whether an old round's predictions can be rebuilt. Host-side
-  check (network).
+- ~~**Past rounds**~~ — resolved 2026-10-23 on the host: on round 1383 (2026-10-23),
+  `download_dataset("v6.0/live.parquet", …, round_num=1378)` returned a 4.44 MB file
+  whose only `date` is `2026-10-15`, not the current date. The server serves past
+  rounds' live files, so an old round's predictions can be rebuilt.
 - **Validation rewrites:** whether Numerai rewrites `validation.parquet` in place within
   v6.0. Decision 5 is safe either way; the answer only changes how often a new snapshot
   is worth taking.
