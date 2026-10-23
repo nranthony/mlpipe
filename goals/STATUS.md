@@ -3,10 +3,10 @@
 **Current state (update in place; the log below is append-only):**
 - Build cycles 0–10: code complete since 2026-08-20.
 - Active work: work/0006 plan ([plan.md](../work/0006-core-library-extraction/plan.md)).
-  Steps 1–13 and 16 done; `v0.1.0` tagged. work/0008 (cache and provenance correctness)
-  built; **human: `uv lock`, tag `v0.2.0`, push.** Step 14 (numerai adoption) waits for
-  that tag and is driven from the numerai side (its work/0012 review). Next here:
-  work/0009 (live identity, serve pipeline), work/0010 (hygiene), optional step 15.
+  Steps 1–13 and 16 done. `v0.2.0` tagged (work/0008, cache and provenance
+  correctness; archived). Step 14 (numerai adoption, pinned to `v0.2.0`) is unblocked
+  and driven from the numerai side (its work/0012 review). Next here: work/0009 (live
+  identity, serve pipeline), work/0010 (hygiene), optional step 15.
 - Data: Numerai **v6.0** (v5.x training files are no longer served). Raw files are in
   `/workspace/raw_data/numerai/v6.0` (downloaded host-side 2026-10-20).
 - Real data: one full v6.0 run (step 13: plan `8b0a1167`, bundle `f7cc4688`), but at
@@ -427,3 +427,5 @@ Log:
   - The sandbox venv's metadata still says mlpipe 0.0.1 (a stale editable install), so
     sandbox manifests record that until a host-side sync.
   - 16 new tests; 139 green, ruff clean.
+- 2026-10-23 — **v0.2.0 released.** Human ran `uv lock` (`51d0b94`), tagged `v0.2.0`
+  and pushed. work/0008 archived; work/0006 step 14 unblocked (numerai pins `v0.2.0`).

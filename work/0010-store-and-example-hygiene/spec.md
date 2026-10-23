@@ -2,7 +2,7 @@
 
 - Status: **Draft — awaiting sign-off.** No item here is a wrong-result bug in mlpipe
   itself; each is cheap and makes the next host adoption or real-data run less
-  surprising. Ship in any order, after [work/0008](../0008-cache-correctness/spec.md).
+  surprising. Ship in any order, after [work/0008](../archive/0008-cache-correctness/spec.md).
 - Origin: numerai `work/0012-ml-core-review`. The review's P2-11 and P1-10 cover the
   store, registry and gc items. Its `reviews/datascience.md` §1d, §2 and P2-13 cover the
   example items. All were re-checked here 2026-10-22.
