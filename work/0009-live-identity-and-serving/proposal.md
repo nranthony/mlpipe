@@ -1,9 +1,10 @@
 # Proposal: Live-data identity and a serve pipeline with lineage
 
-- Status: Draft
+- Status: In review → [ADR-0007](../../docs/adr/0007-live-data-identified-by-round.md) (Proposed 2026-10-23)
 - Author: Claude, from numerai `work/0012-ml-core-review` §5 (P0-2, P1-18; mlops C9, C14,
   C15), re-checked here 2026-10-22
-- Decision on acceptance: an ADR "Live data is identified by round" (review D4)
+- Decision on acceptance: ADR-0007 "Live data is identified by round" (review D4). The
+  ADR resolves both open questions below: `--input` stays; past rounds are a host check.
 
 ## Summary
 

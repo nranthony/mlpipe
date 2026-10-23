@@ -6,7 +6,8 @@
   Steps 1–13 and 16 done. `v0.2.0` tagged (work/0008, cache and provenance
   correctness; archived). Step 14 (numerai adoption, pinned to `v0.2.0`) is unblocked
   and driven from the numerai side (its work/0012 review). work/0010 (hygiene) built
-  and archived. Next here: work/0009 (live identity, serve pipeline), optional step 15.
+  and archived. In review: ADR-0007 (work/0009, live identity and serving) and
+  ADR-0008 (optional step 15, Copier template), both Proposed 2026-10-23.
 - Data: Numerai **v6.0** (v5.x training files are no longer served). Raw files are in
   `/workspace/raw_data/numerai/v6.0` (downloaded host-side 2026-10-20).
 - Real data: the example's comparable baseline is the 2026-10-23 v6.0 run (work/0010):
@@ -466,3 +467,11 @@ Log:
   - Manifests record `environment.mlpipe.dirty: true` (the human's uncommitted
     `.vscode/settings.json`) and version 0.0.1 (stale sandbox metadata).
   - work/0010 archived.
+- 2026-10-23 — **ADR-0007 and ADR-0008 drafted (Proposed).** ADR-0007 decides work/0009:
+  round-keyed immutable live paths, `ingest_live.round` as required config, serving as
+  a pipeline with manifests, dated training snapshots, a fetch-time freshness check and
+  `run_id`. numerapi's client was checked: `download_dataset(..., round_num=)` passes the
+  round to the server; whether old live rounds are still served is a host-side check.
+  ADR-0008 pins `copier==9.18.2` (newest before the 2026-09-21 cutoff; copier-org, MIT),
+  keeps the template in this repo under `template/`, forbids tasks, migrations and Jinja
+  extensions, and builds it after numerai's step 14 shows its first cache hit.
