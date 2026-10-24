@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import uuid
 from pathlib import Path
 
 import typer
@@ -43,21 +44,57 @@ def run(
     store_dir: Path = typer.Option(Path("store"), help="artifact store root"),
     manifests_dir: Path = MANIFESTS,
 ) -> None:
-    steps, cfg, top = _load(pipeline, config)
+    steps, serve, cfg, top = _load(pipeline, config)
     log_dir = _log_dir(pipeline, manifests_dir)
-    pipe = Pipeline(steps, LocalCasStore(store_dir), log_dir, cfg, _make_tracker(top))
+    pipe = Pipeline(steps, LocalCasStore(store_dir), log_dir, cfg, _make_tracker(top),
+                    sibling_steps=_siblings(steps + serve, steps))
     result = pipe.run(from_step, to_step, overrides=set_, tag=tag)
     for m in result["manifests"]:
-        typer.echo(f"{m['step']:<20} {m['status']:<8} sig={m['signature'][:8]} "
-                   f"outputs={ {k: h[:8] for k, h in m['outputs'].items()} }")
+        _echo_status(m)
 
 
-def _load(pipeline: str, config: Path | None) -> tuple[list, dict, PipelineConfig]:
-    """Steps, raw config, and the validated top-level keys (tracker, tune, ...)."""
+def _echo_status(m: dict) -> None:
+    typer.echo(f"{m['step']:<20} {m['status']:<8} sig={m['signature'][:8]} "
+               f"outputs={ {k: h[:8] for k, h in m['outputs'].items()} }")
+
+
+def _load(pipeline: str, config: Path | None) -> tuple[list, list, dict, PipelineConfig]:
+    """Training steps, serve steps, raw config, and the validated top-level keys
+    (tracker, tune, ...). Both lists share the config, so the top level is
+    validated against both lists' names."""
     module = _module(pipeline)
     cfg = yaml.safe_load(config.read_text()) if config else getattr(module, "DEFAULT_CONFIG", {})
-    steps = module.build_steps()
-    return steps, cfg, validate_config(cfg, [s.name for s in steps])
+    steps, serve = module.build_steps(), _serve_steps(module)
+    return steps, serve, cfg, validate_config(cfg, [s.name for s in steps + serve])
+
+
+def _siblings(every: list, ran: list) -> list[str]:
+    """The sibling rule (work/0009 A2): every step name of the module's training
+    and serve lists that this Pipeline does not run."""
+    own = {s.name for s in ran}
+    return [s.name for s in every if s.name not in own]
+
+
+def _serve_steps(module) -> list:
+    """`build_serve_steps()` (optional): a source step (no inputs, one output)
+    first, a PredictStep last. Without it, serving is `[PredictStep()]` on --input.
+    Called by run/tune for names too, so a serve module must import cheaply."""
+    from mlpipe.steps.predict import PredictStep
+
+    if not hasattr(module, "build_serve_steps"):
+        return [PredictStep()]
+    serve = module.build_serve_steps()
+    if not serve or serve[0].inputs or len(serve[0].outputs) != 1:
+        raise typer.BadParameter(
+            f"{module.__name__}.build_serve_steps(): the first step must be a source "
+            "(no inputs, exactly one output)", param_hint="--pipeline"
+        )
+    if not isinstance(serve[-1], PredictStep):
+        raise typer.BadParameter(
+            f"{module.__name__}.build_serve_steps(): the last step must be a PredictStep",
+            param_hint="--pipeline",
+        )
+    return serve
 
 
 def _module(pipeline: str):
@@ -90,12 +127,13 @@ def tune(
     cleaner knob) recomputes honestly instead of being inert."""
     import optuna
 
-    steps, cfg, top = _load(pipeline, config)
+    steps, serve, cfg, top = _load(pipeline, config)
     tcfg = top.tune
     if tcfg is None:
         raise typer.BadParameter(f"pipeline {pipeline!r} config has no `tune` section")
     log_dir = _log_dir(pipeline, manifests_dir)
-    pipe = Pipeline(steps, LocalCasStore(store_dir), log_dir, cfg, _make_tracker(top))
+    pipe = Pipeline(steps, LocalCasStore(store_dir), log_dir, cfg, _make_tracker(top),
+                    sibling_steps=_siblings(steps + serve, steps))
     study =optuna.create_study(
         study_name=tcfg.study,
         storage=tcfg.storage,
@@ -174,7 +212,7 @@ def promote(
     # plan_hash/target are optional: a bundle from a pipeline without CV or a
     # single named target still promotes; the pin records what the bundle has.
     plan_hash, target = content.get("plan_hash"), content.get("target")
-    tracker = _make_tracker(_load(pipeline, config)[2])
+    tracker = _make_tracker(_load(pipeline, config)[3])
     version = None
     if tracker is not None:
         meta = {"plan_hash": plan_hash} if plan_hash else {}
@@ -193,14 +231,10 @@ def promote(
         "inputs": {"model_bundle": full}, "outputs": {}, "metrics": {},
         "meta": {"name": name, "alias": alias, "registry_version": version},
         "git_commit": pinned["git_commit"], "started_at": now, "ended_at": now,
+        "run_id": uuid.uuid4().hex,
     })
     typer.echo(f"promoted {name}@{alias} -> bundle {full[:8]} (plan {(plan_hash or '-')[:8]}, "
                f"registry v{version}) -> {baselines} [{pipeline}.{alias}]")
-
-
-def _default_prepare(frame, bundle: dict):
-    """(features in bundle order, id columns to carry into the output)."""
-    return frame.select(bundle["features"]), frame.select(bundle.get("id_columns", []))
 
 
 @app.command()
@@ -209,25 +243,39 @@ def predict(
     alias: str = typer.Option("champion", help="baselines.yaml slot to serve when no --bundle"),
     pipeline: str = PIPELINE,
     input_: Path = typer.Option(
-        None, "--input", help="parquet to score (default: the pipeline's serve_input hook)"
+        None, "--input", exists=True, dir_okay=False,
+        help="parquet to score in place of the serve list's source step "
+             "(required when the pipeline has no build_serve_steps)",
     ),
+    set_: list[str] = typer.Option(None, "--set", help="config override key.path=value"),
+    tag: str = typer.Option(None, help="tag recorded in the serve manifests"),
+    config: Path = typer.Option(None, help="YAML config file (else module default)"),
     store_dir: Path = typer.Option(Path("store")),
     manifests_dir: Path = MANIFESTS,
     baselines: Path = typer.Option(Path("baselines.yaml")),
     out: Path = typer.Option(Path("predictions.parquet")),
 ) -> None:
-    """Serve: load the promoted bundle (or an explicit one) and predict on --input
-    or the pipeline's default serving input — no training internals, no MLflow.
+    """Serve (ADR-0007): run the pipeline's serve steps with the promoted bundle
+    (or an explicit one) seeded, logged to the same manifest log as training, so
+    `mlpipe lineage <predictions>` reaches the training run. No tracker.
 
-    Pipeline hooks (both optional): `serve_input(log, store) -> (frame, label)`
-    and `prepare(frame, bundle) -> (features, ids)`; the output is ids + prediction."""
-    import polars as pl
+    A module's optional `build_serve_steps()` lists a source step (no inputs, one
+    output; name what it reads in config, e.g. `--set <source>.<key>=N`) through a
+    PredictStep. `--input` replaces the source with a snapshot of the file; without
+    serve steps, `--input` is required and is scored by `PredictStep()` alone."""
+    import shutil
+    from datetime import UTC, datetime
+
+    from pydantic import ValidationError
 
     from mlpipe.baselines import pinned
-    from mlpipe.core.manifest import ManifestLog
+    from mlpipe.core.interfaces import Artifact
+    from mlpipe.core.manifest import ManifestLog, git_commit
 
+    # Order: the name, the bundle, the module contract, then --input (work/0009 A4).
     module = _module(pipeline)
-    log, store = ManifestLog(_log_dir(pipeline, manifests_dir)), LocalCasStore(store_dir)
+    log_dir = _log_dir(pipeline, manifests_dir)
+    log = ManifestLog(log_dir)
     if bundle:
         bundle_hash = _resolve_bundle(log, bundle)
     else:
@@ -238,24 +286,68 @@ def predict(
                 "run `mlpipe promote` first"
             )
         bundle_hash = pin["bundle_hash"]
+
+    stale = [h for h in ("serve_input", "prepare") if hasattr(module, h)]
+    if stale:  # a silently ignored prepare would serve unfilled features: wrong, no error
+        raise typer.BadParameter(
+            f"{module.__name__} defines {' and '.join(stale)}; these hooks are no longer read "
+            "(ADR-0007): declare build_serve_steps() ending in PredictStep(prepare=...)",
+            param_hint="--pipeline",
+        )
+    steps, serve, cfg, _ = _load(pipeline, config)
+    has_source = hasattr(module, "build_serve_steps")
+    if input_ is None and not has_source:
+        raise typer.BadParameter(
+            f"pipeline {pipeline!r} has no build_serve_steps(); pass --input", param_hint="--input"
+        )
+
+    store = LocalCasStore(store_dir)
+    if not store.exists(bundle_hash):
+        raise typer.BadParameter(f"bundle {bundle_hash[:12]} is not in the store")
     content = store.load(bundle_hash)
+    seeds = [Artifact("model_bundle", bundle_hash, store.path_of(bundle_hash), {})]
+    for key, field in (("model", "model_hash"), ("fitted_transformer", "transformer_hash")):
+        h = content.get(field)
+        if not h or not store.exists(h):
+            raise typer.BadParameter(f"bundle {bundle_hash[:12]}: {key} {h} is not in the store")
+        seeds.append(Artifact(key, h, store.path_of(h), {}))
+
+    # --input replaces the source step (or, without one, feeds PredictStep directly)
+    run_steps = serve[1:] if input_ is not None and has_source else serve
+    pipe = Pipeline(run_steps, store, log_dir, cfg, tracker=None,
+                    sibling_steps=_siblings(steps + serve, run_steps))
+    try:  # before anything is written
+        pipe.resolved_config(set_)
+    except (TypeError, ValidationError) as exc:  # config errors are usage errors
+        raise typer.BadParameter(str(exc), param_hint="--set/--config") from None
 
     if input_ is not None:
-        frame, source = pl.read_parquet(input_), str(input_)
-    elif hasattr(module, "serve_input"):
-        frame, source = module.serve_input(log, store)
-    else:
-        raise typer.BadParameter(f"pipeline {pipeline!r} has no serve_input hook; pass --input")
-    feats, ids = getattr(module, "prepare", _default_prepare)(frame, content)
-    transformer = store.load(content["transformer_hash"])
-    matrix = transformer.transform(feats.to_numpy())
-    model = store.load(content["model_hash"])["full"]
-    preds = model.predict(pl.from_numpy(matrix, schema=content["features"]))
-    result = ids.with_columns(pl.Series("prediction", preds))
-    result.write_parquet(out)
+        key = serve[0].outputs[0] if has_source else serve[-1].frame_key
+        frame = store.save(input_, key, ext="parquet")  # streamed snapshot
+        seeds.append(frame)
+        now = datetime.now(UTC).isoformat()
+        # lineage would otherwise stop at a bare hash
+        record = {
+            "step": "input", "status": "success", "signature": f"input:{frame.content_hash}",
+            "inputs": {}, "outputs": {key: frame.content_hash}, "metrics": {},
+            "meta": {"file": str(input_), "bytes": input_.stat().st_size},
+            "git_commit": git_commit(), "tag": tag, "started_at": now, "ended_at": now,
+            "run_id": uuid.uuid4().hex,
+        }
+        log.write(record)
+        _echo_status(record)
+
+    result = pipe.run(overrides=set_, tag=tag, seeds=seeds)
+    for m in result["manifests"]:
+        _echo_status(m)
+
+    preds = result["artifacts"]["predictions"]
+    shutil.copyfile(preds.path, out)  # same bytes: the file's sha256 is the artifact hash
+    rows = result["manifests"][-1]["meta"].get("rows")
     typer.echo(
         f"{content.get('model_name', '?')} (bundle {bundle_hash[:8]}, "
-        f"plan {(content.get('plan_hash') or '-')[:8]}) -> {out} ({result.height} rows, {source})"
+        f"plan {(content.get('plan_hash') or '-')[:8]}) -> {out} ({rows} rows, "
+        f"predictions {preds.content_hash[:8]})"
     )
 
 

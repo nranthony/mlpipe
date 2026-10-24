@@ -11,6 +11,8 @@ import copy
 import json
 import platform
 import traceback
+import uuid
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from importlib import metadata
 from pathlib import Path
@@ -92,8 +94,13 @@ class Pipeline:
         tracker: Any = None,
         project_root: Path | str | None = None,
         packages: tuple[str, ...] = (),
+        sibling_steps: Iterable[str] = (),
     ) -> None:
         self.steps = list(steps)
+        # Steps sharing this config that this pipeline doesn't run (a module's serve
+        # list beside its training list): their subtrees pass top-level validation
+        # untouched and enter no signature here.
+        self.sibling_steps = list(sibling_steps)
         self.store = store
         self.log = ManifestLog(manifests_dir)
         self.config = config or {}
@@ -111,9 +118,34 @@ class Pipeline:
         tag: str | None = None,
         seeds: list[Artifact] | None = None,
     ) -> dict[str, Any]:
+        config = self.resolved_config(overrides)
+        names = [s.name for s in self.steps]
+        ctx = RunContext(config, self.store, self.tracker)
+        ctx.manifest_log = self.log
+        for artifact in seeds or []:
+            ctx.register(artifact)
+
+        lo = names.index(from_step) if from_step else 0
+        hi = names.index(to_step) + 1 if to_step else len(self.steps)
+        env = environment_info(self.project_root, self.packages)
+        run_id = uuid.uuid4().hex  # groups this run's manifests; in no signature
+
+        # Upstream of --from is resolved by signature under the CURRENT config and
+        # must be a cache hit: --from asserts "upstream is cached", it never serves
+        # outputs some other config produced (work/0004 C).
+        upstream = [
+            self._run_step(s, ctx, config, tag, env, run_id, from_step=from_step)
+            for s in self.steps[:lo]
+        ]
+        written = [self._run_step(s, ctx, config, tag, env, run_id) for s in self.steps[lo:hi]]
+        return {"artifacts": dict(ctx.registry), "manifests": upstream + written}
+
+    def resolved_config(self, overrides: list[str] | None = None) -> dict:
+        """Overrides applied and every subtree validated: what `run` executes with.
+        Raises before any step runs (TypeError, pydantic ValidationError)."""
         config = apply_overrides(self.config, overrides)
         names = [s.name for s in self.steps]
-        validate_config(config, names)  # top-level typos die here too
+        validate_config(config, names + self.sibling_steps)  # top-level typos die here too
         for step in self.steps:  # config typos die here, before any step runs
             model = getattr(step, "config_model", None)
             if model is not None:
@@ -125,24 +157,7 @@ class Pipeline:
                 config[step.name] = model.model_validate(config.get(step.name, {})).model_dump()
             elif config.get(step.name):  # nothing could validate it: a typo would pass
                 raise TypeError(f"step {step.name!r} has config but no config_model")
-        ctx = RunContext(config, self.store, self.tracker)
-        ctx.manifest_log = self.log
-        for artifact in seeds or []:
-            ctx.register(artifact)
-
-        lo = names.index(from_step) if from_step else 0
-        hi = names.index(to_step) + 1 if to_step else len(self.steps)
-        env = environment_info(self.project_root, self.packages)
-
-        # Upstream of --from is resolved by signature under the CURRENT config and
-        # must be a cache hit: --from asserts "upstream is cached", it never serves
-        # outputs some other config produced (work/0004 C).
-        upstream = [
-            self._run_step(s, ctx, config, tag, env, from_step=from_step)
-            for s in self.steps[:lo]
-        ]
-        written = [self._run_step(s, ctx, config, tag, env) for s in self.steps[lo:hi]]
-        return {"artifacts": dict(ctx.registry), "manifests": upstream + written}
+        return config
 
     def _run_step(
         self,
@@ -151,6 +166,7 @@ class Pipeline:
         config: dict,
         tag: str | None,
         env: dict,
+        run_id: str,
         from_step: str | None = None,
     ) -> dict:
         ctx.reset_step(step.inputs)
@@ -166,6 +182,7 @@ class Pipeline:
             "environment": env,
             "inputs": input_hashes,
             "tag": tag,
+            "run_id": run_id,
             "started_at": started,
         }
 

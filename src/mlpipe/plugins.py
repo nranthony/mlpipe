@@ -7,6 +7,15 @@ without mlpipe knowing their names (stdlib `importlib.metadata`).
     [project.entry-points."mlpipe.backends"]
     xgboost = "myproj.backends:XGBBackend"  # a ModelBackend class
 
+A pipeline module may also define `build_serve_steps() -> list[Step]` (ADR-0007),
+run by `mlpipe predict` with the pinned bundle seeded. Its first step is the
+source (no inputs, exactly one output; what it reads is named in its config, e.g.
+a round), its last a `mlpipe.steps.predict.PredictStep` (a host's feature fill
+goes in as `PredictStep(prepare=...)`). Both lists share DEFAULT_CONFIG. `run`
+and `tune` call it for step names too, so it must import cheaply (heavy clients
+imported inside functions). Without it, predict scores `--input` with
+`PredictStep()`. The old `serve_input` and `prepare` hooks are rejected.
+
 Entry points live in installed package metadata, so a new one appears only after
 the host package is (re)installed. mlpipe's own pipelines and backends are
 builtins here, which keeps them working in an environment synced before this
