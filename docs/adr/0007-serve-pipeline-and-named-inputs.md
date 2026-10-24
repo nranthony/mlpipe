@@ -2,6 +2,13 @@
 
 - Status: Accepted 2026-10-23 (nanthony). Decision 6 amended on acceptance: the
   freshness check compares against the round's open time, not the fetch time.
+  Refined by the work/0009 spec (2026-10-24), same intent:
+  - decision 6's check runs in `ingest_live`, on the downloaded file before it is
+    renamed into place, and is two-sided (a live date after the round's open time
+    fails too);
+  - decision 5 downloads a missing snapshot folder only when its date is today, so a
+    folder never holds later bytes than its name;
+  - the re-download is ~3.57 GB, not ~2.5 GB.
 - Date: 2026-10-23
 - Deciders: nanthony + Claude (work/0009; findings from an external review of the core,
   numerai `work/0012-ml-core-review` D4, P0-2, P1-18, mlops C9/C14/C15)
