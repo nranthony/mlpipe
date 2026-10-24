@@ -154,7 +154,8 @@ def test_shipped_default_configs_validate(name):
     from mlpipe.plugins import pipeline_module
 
     module = pipeline_module(name)
-    validate_config(module.DEFAULT_CONFIG, [s.name for s in module.build_steps()])
+    serve = module.build_serve_steps() if hasattr(module, "build_serve_steps") else []
+    validate_config(module.DEFAULT_CONFIG, [s.name for s in module.build_steps() + serve])
 
 
 # ---------------------------------------------------------------- hygiene (step 7)
@@ -255,7 +256,7 @@ def test_v6_validate_accepts_date_era_and_mixed_feature_dtypes(env):
     from mlpipe.examples.numerai.validate import ValidateStep
 
     store, tmp = env
-    seeds = [store.save(v6_frame(), k, ext="parquet") for k in ("raw_train", "raw_validation", "raw_live")]
+    seeds = [store.save(v6_frame(), k, ext="parquet") for k in ("raw_train", "raw_validation")]
     seeds.append(store.save(V6_META, "features_meta", ext="json"))
     pipe = Pipeline([ValidateStep()], store, tmp / "m", {"validate": V6_VALIDATE})
     (m,) = pipe.run(seeds=seeds)["manifests"]
@@ -294,7 +295,7 @@ def test_v6_null_bound_is_per_dtype(env):
     cfg = {"validate": {**V6_VALIDATE, "max_feature_null_frac_by_dtype": {"Float32": 0.3}}}
 
     def run(frame, manifests):
-        seeds = [store.save(frame, k, ext="parquet") for k in ("raw_train", "raw_validation", "raw_live")]
+        seeds = [store.save(frame, k, ext="parquet") for k in ("raw_train", "raw_validation")]
         seeds.append(store.save(V6_META, "features_meta", ext="json"))
         return Pipeline([ValidateStep()], store, tmp / manifests, cfg).run(seeds=seeds)
 

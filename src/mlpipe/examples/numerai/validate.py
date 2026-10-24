@@ -20,7 +20,6 @@ from mlpipe.core.interfaces import Step, StepResult
 PASS_THROUGH = {
     "raw_train": "validated_train",
     "raw_validation": "validated_validation",
-    "raw_live": "validated_live",
 }
 
 
@@ -125,8 +124,8 @@ def check_table(
 
 class ValidateStep(Step):
     name = "validate"
-    inputs = ["raw_train", "raw_validation", "raw_live", "features_meta"]
-    outputs = ["validated_train", "validated_validation", "validated_live", "validation_report"]
+    inputs = ["raw_train", "raw_validation", "features_meta"]
+    outputs = ["validated_train", "validated_validation", "validation_report"]
     config_model = ValidateConfig
 
     def run(self, ctx):

@@ -176,8 +176,9 @@ keeps failing as today (no pin), and the second-domain test keeps using `--input
 - **Freshness (ADR-0007 decision 6), two-sided.** Fail if the era column has more than
   one value, is not an ISO date, is more than `max_age_days` before `open_time`'s
   date, **or is after it**. The likeliest wrong file in a backfill is the *current*
-  round's, whose date is later than the requested round's open time (round 1378: data
-  `2026-10-15`, opened the day after).
+  round's, whose date is later than the requested round's open time. (Round 1378's
+  file, fetched during round 1383, is dated `2026-10-15`; its open time wasn't
+  recorded, so the real run should confirm the date never falls after it.)
   - On a download, the check runs on the part file before it is renamed into place
     (B4), so a wrong file never lands at the immutable path. On an existing file, a
     failure names the path; removing it is a human step (decision 7).

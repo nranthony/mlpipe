@@ -16,6 +16,8 @@ from mlpipe.core.pipeline import Pipeline
 from mlpipe.core.store import LocalCasStore
 from mlpipe.examples.numerai.ingest import DATASETS, IngestStep
 
+SNAPSHOT = "2026-01-05"
+
 
 def fixture_frame(rows: int = 6) -> pl.DataFrame:
     return pl.DataFrame(
@@ -30,7 +32,7 @@ def fixture_frame(rows: int = 6) -> pl.DataFrame:
 
 @pytest.fixture()
 def env(tmp_path):
-    raw = tmp_path / "raw" / "v9.9-test"
+    raw = tmp_path / "raw" / "v9.9-test" / SNAPSHOT
     raw.mkdir(parents=True)
     for fname in DATASETS.values():
         fixture_frame().write_parquet(raw / fname)
@@ -39,7 +41,7 @@ def env(tmp_path):
     )
     config = {
         "download_dir": str(tmp_path / "raw"),
-        "ingest": {"version": "v9.9-test"},
+        "ingest": {"version": "v9.9-test", "snapshot": SNAPSHOT},
     }
     store = LocalCasStore(tmp_path / "store")
     return store, tmp_path / "manifests", config
@@ -53,7 +55,8 @@ def test_cycle1_snapshot_roundtrip(env):
     store, manifests, config = env
     result = build_pipeline(store, manifests, config).run()
 
-    for key in ("raw_train", "raw_validation", "raw_live"):
+    assert "raw_live" not in result["artifacts"]  # live is serve.py's
+    for key in ("raw_train", "raw_validation"):
         df = store.load(result["artifacts"][key].content_hash)
         assert isinstance(df, pl.DataFrame)
         assert df["feature_alpha"].dtype == pl.Int8  # int8 intact through snapshot
@@ -77,9 +80,9 @@ def test_cycle1_manifest_records_dataset(env):
     result = build_pipeline(store, manifests, config).run()
     (manifest,) = result["manifests"]
     meta = manifest["meta"]
-    assert meta["dataset"] == {"name": "numerai", "version": "v9.9-test"}
+    assert meta["dataset"] == {"name": "numerai", "version": "v9.9-test", "snapshot": SNAPSHOT}
     for key, fname in DATASETS.items():
-        assert meta[key]["file"] == f"v9.9-test/{fname}"
+        assert meta[key]["file"] == f"v9.9-test/{SNAPSHOT}/{fname}"
         assert meta[key]["bytes"] > 0
         assert meta[key]["rows"] == 6
 
@@ -95,10 +98,13 @@ def test_cycle1_version_change_busts_cache_but_download_dir_does_not(env, tmp_pa
     assert result["manifests"][0]["status"] == "cached"  # infra move: same identity
 
     shutil.copytree(tmp_path / "raw2" / "v9.9-test", tmp_path / "raw2" / "v9.8-test")
-    result = build_pipeline(store, manifests, dict(moved, ingest={"version": "v9.8-test"})).run()
+    ingest = {"version": "v9.8-test", "snapshot": SNAPSHOT}
+    result = build_pipeline(store, manifests, dict(moved, ingest=ingest)).run()
     assert result["manifests"][0]["status"] == "success"  # identity change: re-runs
 
     # A key ingest never reads used to move the signature silently; now it is a
     # typo and fails validation (work/0008 item 3).
-    with pytest.raises(ValueError, match="round"):
-        build_pipeline(store, manifests, dict(moved, ingest={"version": "v9.9-test", "round": 2})).run()
+    with pytest.raises(ValueError, match="bogus"):
+        build_pipeline(
+            store, manifests, dict(moved, ingest={**ingest, "version": "v9.9-test", "bogus": 2})
+        ).run()

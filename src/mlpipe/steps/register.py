@@ -15,7 +15,7 @@ from mlpipe.core.interfaces import Step, StepResult
 class RegisterConfig(StrictConfig):
     model_name: str = "model"
     # Columns `predict` carries from the scored frame into its output (the
-    # default prepare hook reads them from the bundle), e.g. a row key.
+    # default PredictStep prepare reads them from the bundle), e.g. a row key.
     id_columns: list[str] = []
 
 

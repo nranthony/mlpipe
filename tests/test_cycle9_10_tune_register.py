@@ -20,9 +20,15 @@ from mlpipe.core.store import LocalCasStore
 runner = CliRunner()
 
 
+SNAPSHOT = "2026-01-05"
+LIVE_ROUND = 1000
+
+
 def toy_snapshot(root):
-    raw = root / "raw" / "v0-toy"
+    raw = root / "raw" / "v0-toy" / SNAPSHOT
     raw.mkdir(parents=True)
+    live_dir = root / "raw" / "v0-toy" / "live" / str(LIVE_ROUND)
+    live_dir.mkdir(parents=True)
     rng = np.random.default_rng(5)
     rows = 120
     fa = rng.integers(0, 5, rows).astype(np.int8)
@@ -36,8 +42,10 @@ def toy_snapshot(root):
             "target": target,
         }
     )
-    for name in ("train.parquet", "validation.parquet", "live.parquet"):
+    for name in ("train.parquet", "validation.parquet"):
         df.write_parquet(raw / name)
+    # a live file has one era: a single ISO date
+    df.with_columns(pl.lit("2026-01-02").alias("era")).write_parquet(live_dir / "live.parquet")
     (raw / "features.json").write_text(
         json.dumps({"feature_sets": {"all": ["feature_fa", "feature_fb"]}, "targets": ["target"]})
     )
@@ -49,8 +57,10 @@ def env(tmp_path_factory):
     toy_snapshot(tmp)
     config = {
         "download_dir": str(tmp / "raw"),
-        "ingest": {"version": "v0-toy"},
+        "ingest": {"version": "v0-toy", "snapshot": SNAPSHOT},
+        "ingest_live": {"version": "v0-toy", "era_column": "era"},
         "validate": {"row_tolerance": 0.5},
+        "validate_live": {"era_column": "era"},
         "clean": {"cleaner": {"kind": "baseline", "feature_set": "all"}},
         "features": {"transformer": {"kind": "passthrough"}},
         "cvplan": {"n_folds": 2, "purge_eras": 0, "embargo_eras": 0},
@@ -134,12 +144,15 @@ def test_adr0006_promote_rejects_unknown_bundle(env):
     assert result.exit_code != 0
 
 
-def test_cycle10_fresh_process_predicts_from_raw_live(env):
+def test_cycle10_fresh_process_predicts_from_stored_state(env):
+    """A new process serves from the store, manifests and pin alone. `--input` skips
+    `ingest_live` (its round-open lookup needs the network); validate_live still runs."""
     tmp, _, dirs = env
     promote(tmp, dirs, bundle_hash_of(tmp))
     out = tmp / "preds.parquet"
+    live = tmp / "raw" / "v0-toy" / "live" / str(LIVE_ROUND) / "live.parquet"
     proc = subprocess.run(
-        [sys.executable, "-m", "mlpipe.cli", "predict", *dirs[2:],
+        [sys.executable, "-m", "mlpipe.cli", "predict", *dirs, "--input", str(live),
          "--baselines", str(tmp / "baselines.yaml"), "--out", str(out)],
         capture_output=True, text=True, cwd="/workspace/mlpipe", check=False,
     )
@@ -151,11 +164,13 @@ def test_cycle10_fresh_process_predicts_from_raw_live(env):
 def test_work0006_predict_scores_an_explicit_input_keyed_by_ticker(env):
     tmp, _, dirs = env
     promote(tmp, dirs, bundle_hash_of(tmp))
-    live = pl.read_parquet(tmp / "raw" / "v0-toy" / "live.parquet").head(7)
+    live = pl.read_parquet(
+        tmp / "raw" / "v0-toy" / "live" / str(LIVE_ROUND) / "live.parquet"
+    ).head(7)
     src = tmp / "to_score.parquet"
     live.with_columns(pl.Series("numerai_ticker", [f"T{i}" for i in range(7)])).write_parquet(src)
     out = tmp / "explicit.parquet"
-    result = runner.invoke(app, ["predict", *dirs[2:], "--input", str(src),
+    result = runner.invoke(app, ["predict", *dirs, "--input", str(src),
                                  "--baselines", str(tmp / "baselines.yaml"), "--out", str(out)])
     assert result.exit_code == 0, result.output
     preds = pl.read_parquet(out)

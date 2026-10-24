@@ -44,7 +44,6 @@ def all_clean():
     return {
         "raw_train": clean_frame(),
         "raw_validation": clean_frame(),
-        "raw_live": clean_frame(),
     }
 
 
@@ -97,14 +96,14 @@ def test_cycle2_non_monotonic_era_fails_loud(env):
 def test_cycle2_feature_nulls_fail_loud(env):
     store, manifests = env
     frames = all_clean()
-    frames["raw_live"] = frames["raw_live"].with_columns(
+    frames["raw_validation"] = frames["raw_validation"].with_columns(
         pl.when(pl.int_range(pl.len()) == 0)
         .then(None)
         .otherwise(pl.col("feature_alpha"))
         .cast(pl.Int8)
         .alias("feature_alpha")
     )
-    with pytest.raises(ValueError, match="raw_live.*null"):
+    with pytest.raises(ValueError, match="raw_validation.*null"):
         run_validate(store, manifests, frames)
 
 

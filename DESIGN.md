@@ -38,7 +38,11 @@ from a pinned git tag (ADR-0005); Numerai is its real-data example and test case
   `--set` values parse as JSON first, then YAML (YAML 1.1 reads `1e-05` as a string).
   A config is one subtree per step plus the top-level `PipelineConfig`
   (`core/config.py`: `tracker`, `tune`, `download_dir`); any other top-level key is
-  rejected. Top-level keys sit outside every signature, so nothing that changes a
+  rejected. A module's training and serve lists share one config, so a `Pipeline`
+  also accepts the subtrees of its `sibling_steps` (every step of the module it doesn't
+  run) without validating them; they enter none of its signatures. Inputs that change
+  over time are named in config (a round, a snapshot date), never discovered: a
+  signature must be computable offline (ADR-0007). Top-level keys sit outside every signature, so nothing that changes a
   step's output may live there: seeds belong in the subtree of the step they affect.
 - **Hardware:** 12 GB VRAM GPU, i9-11900K. TorchBackend centralizes device placement
   and memory guards. Flag any config that would exceed 12 GB.
@@ -69,7 +73,9 @@ that depends on one takes it as a seeded artifact or a config value. Relative im
 package, so they count the same as absolute ones. Code that runs from inside an artifact is a separate case: a
 pickled model names its class, not its source, so `train` stores
 `module_code_hash(backend)` in the model artifact. A predict-only backend edit then
-moves the model's bytes, and every consumer that calls `predict` re-runs. The closure is found by `find_spec` + `ast`
+moves the model's bytes, and every consumer that calls `predict` re-runs. Serving a
+pinned bundle retrains nothing, so `PredictStep` instead refuses a model whose stored
+backend hash differs from the code on disk (retrain). The closure is found by `find_spec` + `ast`
 parsing, never by importing — a signature must be computable on a cache hit without
 pulling in lightgbm or torch. `mlpipe.core.*` is deliberately **excluded**: it is the
 orchestrator, not the computation, and including it would invalidate every artifact on
@@ -90,7 +96,8 @@ step name, signature, timestamps, status, the project's git commit (`Pipeline(pr
 default the cwd), config hash and resolved config subtree, environment (the project's
 lockfile + hash and `git_dirty`, Python version, platform, `mlpipe` version and source
 commit, versions of key packages), input
-hashes, output hashes, metrics summary; failed runs add `error` and `traceback`.
+hashes, output hashes, metrics summary, and the `run_id` shared by every manifest of
+one `Pipeline.run` (in no signature); failed runs add `error` and `traceback`.
 `index.jsonl` appends are `flock`ed. Every output hash
 appears as an input hash in some later manifest → the lineage graph is implicit and
 walkable from any model back to raw data + config + commit.
@@ -108,7 +115,7 @@ pass that record to `gc --root-file`, so the champion's lineage stays a gc root.
 
 | # | Block | Contract (inputs → outputs) | Notes |
 |---|-------|------------------------------|-------|
-| 1 | Ingest & snapshot | source config → `raw_train`, `raw_validation`, `raw_live`, `features_meta` | numerapi pull into the shared download cache, freeze exact bytes, hash. Record dataset name/version/size in the manifest. |
+| 1 | Ingest & snapshot | source config (`version`, `snapshot` date) → `raw_train`, `raw_validation`, `features_meta` | Reads `<download_dir>/<version>/<snapshot>/`; a missing folder is downloaded only when its date is today, so a folder never holds later bytes than its name. Freeze exact bytes, hash. Record dataset name/version/snapshot/size in the manifest. Live data is the serve list's job. The download folder may be shared: the example only adds paths to it. |
 | 2 | Validate | raw tables → `validated_*` (zero-copy aliases) + `validation_report` | pandera schemas: columns, the configured era column, feature dtypes against an allow-list, per-dtype null bounds, era monotonicity, row counts vs previous snapshot. Hard gate — fail loud. The report holds content only; the previous row counts it compared against go in manifest meta. |
 | 3 | Clean & transform | validated → `clean_table` + `clean_validation` + `serve_recipe` | Stateless only. `serve_recipe` (cleaner + source era column) is what serving replays on live rows; register takes it as an input. Renames the source's era column to the canonical `era` (v6.0: `date`) and drops `exclude_features`, so nothing downstream knows source names. Same input ⇒ same output. Polars exprs; validation cleaned with the same exprs so downstream skew checks have a target. |
 | 4 | Feature engineering | clean → `feature_table` + `feature_validation` + `fitted_transformer` | Fitted transforms learn from train only and are **unsupervised**: `fit` sees the feature matrix, never the target. A target-aware transform (target encoding, supervised selection) fitted here would leak across CV folds, so it fits per fold inside the ModelBackend instead. The transformer is a versioned artifact that travels with the model; `feature_validation` is what the skew guard compares against. |
@@ -116,6 +123,15 @@ pass that record to `gc --root-file`, so the champion's lineage stays a gc root.
 | 6 | Train & tune | features + fold_plan + model config → `model`, `oof_preds` | Via ModelBackend port. `model` is a `{full, fold_models}` bundle so stored state alone reproduces OOF (5x size, no retraining needed for audit). Optuna via `mlpipe tune`. |
 | 7 | Evaluate | model + oof_preds + fold_plan + feature_validation → `eval_report` + `eval_chart` (metrics JSON + standalone plotly HTML) | Era-wise corr, sharpe, drawdown, feature exposure — for OOF (`mean_corr`, …) and for the full model on the validation holdout (`val_mean_corr`, …), side by side. Eras with unresolved targets are skipped, and so are the first `purge_eras` validation eras, whose labels overlap the full model's last train eras (`val_skipped_eras` in the report). The per-era scorer is configured by import path (`evaluate.scorer: "pkg.mod:fn"`, declared via `code_deps`); the step default is rank-Pearson, the Numerai example uses a `numerai_corr` port. Payout-accurate scoring (NCORR, MMC) is the host's job. A host's frozen holdout must never be the input of a cached step: every run would spend it. Log metrics to MLflow. Generic alternative for the same slot: `TabularEvalStep` (`task: regression` → rmse, mae, r2, corr; `task: binary` → roc_auc, pr_auc, log_loss, brier, accuracy, which need probabilities, so use a classifier backend such as `lightgbm_binary` whose `predict` returns P(y=1)). |
 | 8 | Register & package | model + transformer + eval → `model_bundle` | The bundle holds model + fitted transformer + feature list + plan hash, plus the serving recipe when the pipeline declares one (`RegisterStep(recipe="serve_recipe")`: Numerai's clean emits the fill and source era column as an artifact). Registry versions are created only by `mlpipe promote` (ADR-0006). |
+
+**Serving (ADR-0007)** is a second step list in the same module and manifest log:
+`build_serve_steps()` returns a source step (no inputs, one output), checks, and a
+`PredictStep` last. Numerai: `ingest_live` (round named in config; fetched into
+`<version>/live/<round>/live.parquet` with numerapi's `round_num`; the live date must
+fall within `max_age_days` before the round's open time, checked on the downloaded
+file before it is renamed into place) → `validate_live` (the bundle's features,
+dtypes, null bounds) → `predict` (`PredictStep(frame_key="validated_live",
+prepare=serve.prepare)`: the cleaner's fill, ids `numerai_ticker` + `era`).
 
 The stateless/stateful boundary between blocks 3 and 4 is deliberate: block 3 caches on
 content alone; block 4 produces fitted state that must be versioned with the model.
@@ -144,7 +160,9 @@ for the authoritative signatures. Summary:
   It is the contract between the CV, train and evaluate steps, and the carrier of the
   plan-hash comparability rule, which is generic to any CV pipeline. If `torch.Tensor` appears in the
   interface, the port is broken.
-- `Pipeline`: ordered steps, `run(from_step, to_step, overrides)`, `lineage(hash)`.
+- `Pipeline`: ordered steps (plus `sibling_steps`, names whose config subtrees it
+  accepts), `run(from_step, to_step, overrides, tag, seeds)`, `resolved_config(overrides)`
+  (validation only, before anything runs), `lineage(hash)`.
 
 Rules: no inheritance deeper than Step → ConcreteStep. Fitted transforms use the
 sklearn fit/transform protocol — accept anything sklearn-compatible, don't invent a
@@ -166,12 +184,17 @@ protocol. Plotting/metrics hide behind plain functions, not classes.
   `mlpipe run --pipeline <name> --from <block> --to <block> --set key=value ... --tag <exp>`
   Every agent action is a shell command that lands in the manifest. `--pipeline` is
   required on every verb but `gc`: the CLI is domain-free and has no default pipeline.
-- **Serving:** `mlpipe predict --pipeline <name> [--bundle <hash> | --alias <slot>] [--input <parquet>]`.
-  Without `--input` the pipeline's optional `serve_input(log, store)` hook supplies
-  the frame (Numerai: the latest live snapshot). An optional `prepare(frame, bundle)`
-  hook returns `(features, ids)` (Numerai: the cleaner fill, `numerai_ticker` + `era`).
-  The default selects the bundle's features and its `id_columns` (set by
-  `register.id_columns`). Output: ids + `prediction`.
+- **Serving:** `mlpipe predict --pipeline <name> [--bundle <hash> | --alias <slot>]
+  [--set <source>.<key>=…] [--input <parquet>] [--tag <t>] [--out <path>]` runs the
+  module's serve steps (§2) with the bundle, its `model` and its `fitted_transformer`
+  seeded, into the same manifest log (no tracker), and copies the `predictions`
+  artifact to `--out`. Numerai: `--set ingest_live.round=N` (required; mlpipe never
+  asks what round is current). `--input` replaces the source step with a snapshot of
+  the file and writes an `input` record naming it, so lineage doesn't stop at a bare
+  hash. A module without `build_serve_steps()` is served by `PredictStep()` alone and
+  needs `--input`; its default prepare selects the bundle's features and `id_columns`
+  (`register.id_columns`). The old `serve_input`/`prepare` module hooks are refused
+  (ADR-0007). Output: ids + `prediction`.
 - **Store hygiene:** `mlpipe gc --dry-run [--keep-days 30] [--root-file <path>]` lists
   store files that no pinned, promoted or root-file bundle's lineage, and no manifest
   from the window, reaches. A root file is any text naming 64-hex hashes. It
@@ -207,7 +230,7 @@ version bumps, not merges. Host pipelines and backends register through entry po
 
 ```toml
 [project.entry-points."mlpipe.pipelines"]
-myproj = "myproj.pipeline"             # module with build_steps() and DEFAULT_CONFIG
+myproj = "myproj.pipeline"             # build_steps(), DEFAULT_CONFIG, optional build_serve_steps()
 [project.entry-points."mlpipe.backends"]
 xgboost = "myproj.backends:XGBBackend"  # a ModelBackend class
 ```
@@ -236,6 +259,9 @@ procedure. Its zones are in TEMPLATE_OWNERSHIP.md. Rollout: work/0006 plan.
   `test` rows with null target). Features: 1017 Int8 + 22 Float32 factors (sparse,
   ≤7.1% null) + 1 String (`feature_country`, in every named set). Rows also carry
   `numerai_ticker`. Pull via numerapi. (Aug 2026: v5.2, all-int8, `era`.)
+  Live (2026-10-23, checked host-side): `download_dataset(..., round_num=N)` serves a
+  past round's `live.parquet` (round 1378, fetched during round 1383: one `date`,
+  `2026-10-15`), so a backfill can be rebuilt.
 - W&B self-hosting is enterprise-only → not usable under the local-only constraint.
 - Neptune: acquired by OpenAI, public service winding down → off the table.
 - MLflow: open source, Linux Foundation; local SQLite + ./mlruns works fine; its MCP

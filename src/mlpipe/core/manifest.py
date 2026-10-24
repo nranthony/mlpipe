@@ -83,14 +83,6 @@ class ManifestLog:
                 return m
         return None
 
-    def latest_outputs(self) -> dict[str, str]:
-        """Most recent artifact hash for every output key ever produced."""
-        latest: dict[str, str] = {}
-        for m in self.entries():
-            if m["status"] in ("success", "cached"):
-                latest.update(m["outputs"])
-        return latest
-
     def lineage(self, content_hash: str) -> list[dict]:
         """Manifests from the producer of content_hash back to raw inputs.
         Pass-through steps re-emit an input hash, so a hash can have several

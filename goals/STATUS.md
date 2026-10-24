@@ -6,11 +6,14 @@
   Steps 1–13 and 16 done. `v0.2.0` tagged (work/0008, cache and provenance
   correctness; archived). Step 14 (numerai adoption, pinned to `v0.2.0`) is unblocked
   and driven from the numerai side (its work/0012 review). work/0010 (hygiene) built
-  and archived. Accepted 2026-10-23: ADR-0007 (work/0009, serve pipeline and inputs
-  named in config; spec next) and ADR-0008 (optional step 15, Copier template; waits
-  for step 14's first cache hit).
+  and archived. ADR-0007 / work/0009 (serve pipeline, inputs named in config) built
+  2026-10-24; open until the real-data cache-hit proof (needs the snapshot copy, a
+  human step). ADR-0008 (optional step 15, Copier template) accepted; waits for step
+  14's first cache hit.
 - Data: Numerai **v6.0** (v5.x training files are no longer served). Raw files are in
-  `/workspace/raw_data/numerai/v6.0` (downloaded host-side 2026-10-20).
+  `/workspace/raw_data/numerai/v6.0` (downloaded host-side 2026-10-20). Since work/0009
+  the example reads `v6.0/2026-10-20/` (to be copied there, not moved: the folder is
+  shared) and live files from `v6.0/live/<round>/`.
 - Real data: the example's comparable baseline is the 2026-10-23 v6.0 run (work/0010):
   plan `8b92bc2c`, bundle `1d3c948c`, purge 12, `numerai_corr` scorer, `val_*` skipping
   12 boundary eras. OOF mean_corr 0.0305 (sharpe 1.92), val_mean_corr 0.0193 (sharpe
@@ -19,11 +22,9 @@
   `bundle_hash`), and the registry it referred to is gone. Only `mlpipe promote` may
   rewrite it; `gc --dry-run` reports that it roots nothing. Smoke runs are never promoted.
 - Store: 44 artifacts, 5.45 GB, all kept today by the 30-day window alone.
-- Known issue (found 2026-10-22, not fixed): the Numerai example never refreshes
-  `live.parquet`. `fetch` skips an existing file, and ingest's signature is
-  `{version}` + code, so `predict` scores stale live rows. Size + mtime in the signature
-  would *not* fix it: a cache hit means `fetch` never runs. Design: work/0009
-  (round-keyed path, round in config).
+- Fixed 2026-10-24 (work/0009): the example's stale `live.parquet`. Serving now runs
+  `ingest_live` → `validate_live` → `predict` with the round named in config
+  (`mlpipe predict --pipeline numerai --set ingest_live.round=N`), and leaves manifests.
 
 Log:
 - 2026-08-20: Bootstrap skeleton delivered to repo root. Cycle 0 attempted; blocked
@@ -494,3 +495,31 @@ Log:
   - That result changed decision 6. A freshness check against the fetch time would
     fail every backfill (8 days old here). It now compares against the round's
     `openTime`, which `ingest_live` records when it fetches.
+- 2026-10-24 — **work/0009 built (ADR-0007).**
+  - Spec written, then cross-checked by a fresh-context Opus review. All 17 findings
+    were folded in, including two blockers: `predict --input` would have rejected the
+    dropped source step's config, and `check_table` reads `row_tolerance`.
+  - Part A, the library (`6aec62f`, built by an Opus agent):
+    - `run_id` on every manifest;
+    - `Pipeline(sibling_steps=…)` plus `resolved_config()`;
+    - `steps/predict.py` `PredictStep`, which refuses a model whose backend code
+      changed since training;
+    - `mlpipe predict` runs a module's `build_serve_steps()`. `--input` replaces the
+      source step and writes an `input` record. The old hooks are refused.
+  - Part B, the Numerai example (built by a Sonnet agent):
+    - `ingest: {version, snapshot}` reads `v6.0/<snapshot>/`; a missing folder is
+      downloaded only when its date is today;
+    - `serve.py`: `ingest_live` (round in config; two-sided freshness against the
+      round's `openTime`, checked on the downloaded file before it is renamed into
+      place), `validate_live` (the bundle's features), `prepare`;
+    - training validate drops `raw_live`.
+  - `ManifestLog.latest_outputs` removed (no users).
+  - Measured: 192 tests pass (was 152), ruff clean.
+  - Size: orchestration modules at 707 lines (was 698). A run id and sibling-step
+    validation are orchestration and belong in `pipeline.py`. Removing
+    `latest_outputs` offsets most of what they added.
+  - Not yet run on real data. Next: the human copies the v6.0 files into
+    `v6.0/2026-10-20/`. Then `mlpipe run --pipeline numerai` should re-run only
+    ingest and validate, with bundle `1d3c948c` cached (the cache-hit proof). A real
+    `predict --set ingest_live.round=<current>` needs the Numerai API, probably from
+    the host.

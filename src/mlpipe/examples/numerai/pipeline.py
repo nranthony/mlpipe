@@ -1,22 +1,21 @@
-"""The real Numerai pipeline, plus its serving hooks for `mlpipe predict`.
+"""The real Numerai pipeline, plus its serve steps for `mlpipe predict`.
 
     mlpipe run --pipeline numerai
-    mlpipe predict --pipeline numerai            # latest live snapshot
+    mlpipe predict --pipeline numerai --set ingest_live.round=N
 """
 
 from __future__ import annotations
 
-from typing import Any
-
-import polars as pl
-
 from mlpipe.core.interfaces import Step
+from mlpipe.examples.numerai import serve
 from mlpipe.examples.numerai.clean import CleanStep
 from mlpipe.examples.numerai.evaluate import EvaluateStep
 from mlpipe.examples.numerai.ingest import IngestStep
+from mlpipe.examples.numerai.serve import IngestLiveStep, ValidateLiveStep
 from mlpipe.examples.numerai.validate import ValidateStep
 from mlpipe.steps.cvplan import CVPlanStep
 from mlpipe.steps.features import FeatureStep
+from mlpipe.steps.predict import PredictStep
 from mlpipe.steps.register import RegisterStep
 from mlpipe.steps.train import TrainStep
 
@@ -24,11 +23,21 @@ DEFAULT_CONFIG = {
     "download_dir": "/workspace/raw_data/numerai",  # shared profile-wide cache
     # v6.0 (2026-10): v5.x training files are no longer served. The era column is
     # `date`, and `medium` = 350 Int8 + the String `feature_country`.
-    "ingest": {"version": "v6.0"},
+    # snapshot: the folder <version>/<snapshot>/ (the files' download date); a missing
+    # past-dated folder is an error, only today's is downloaded
+    "ingest": {"version": "v6.0", "snapshot": "2026-10-20"},
+    # no round: `mlpipe predict --set ingest_live.round=N` names it
+    "ingest_live": {"version": "v6.0"},
     "validate": {
         "row_tolerance": 0.2,
         "max_feature_null_frac": 0.0,  # Int8 (and String): dense, so strict
         "max_feature_null_frac_by_dtype": {"Float32": 0.1},  # factor features: ≤7.1% seen
+        "era_column": "date",
+        "feature_dtypes": ["Int8", "Float32", "String"],
+    },
+    "validate_live": {
+        "max_feature_null_frac": 0.0,
+        "max_feature_null_frac_by_dtype": {"Float32": 0.1},
         "era_column": "date",
         "feature_dtypes": ["Int8", "Float32", "String"],
     },
@@ -89,23 +98,10 @@ def build_steps() -> list[Step]:
     ]
 
 
-# --------------------------------------------------------------- serving hooks
-
-
-def serve_input(log: Any, store: Any) -> tuple[pl.DataFrame, str]:
-    """Default input when `mlpipe predict` gets no --input: the latest ingested
-    live snapshot."""
-    live_hash = log.latest_outputs()["raw_live"]
-    return store.load(live_hash), f"live {live_hash[:8]}"
-
-
-def prepare(frame: pl.DataFrame, bundle: dict[str, Any]) -> tuple[pl.DataFrame, pl.DataFrame]:
-    """(features in bundle order, id columns for the output). Replays the
-    cleaner's stateless fill, and keys rows by `numerai_ticker` (what a v6.0
-    submission is keyed by) plus the era under its canonical name."""
-    recipe = bundle["recipe"]  # clean's serve_recipe
-    feats = frame.select(bundle["features"])
-    if recipe["cleaner"]["kind"] == "baseline":
-        feats = feats.with_columns(pl.all().fill_null(recipe["cleaner"]["fill_value"]))
-    ids = [c for c in ("numerai_ticker",) if c in frame.columns]
-    return feats, frame.select(*ids, pl.col(recipe["era_column"]).alias("era"))
+def build_serve_steps() -> list[Step]:
+    """`mlpipe predict` runs these with the promoted bundle seeded (ADR-0007)."""
+    return [
+        IngestLiveStep(),
+        ValidateLiveStep(),
+        PredictStep(frame_key="validated_live", prepare=serve.prepare),
+    ]
