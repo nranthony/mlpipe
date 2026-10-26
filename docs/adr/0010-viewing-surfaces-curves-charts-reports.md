@@ -67,6 +67,26 @@ Two constraints frame it:
 - **Report scripts are not versioned** (`reports/` is gitignored, like `mlruns/`). A
   report worth keeping gets moved somewhere tracked by hand.
 
+## Addendum 2026-10-26: grouping runs (nanthony: "do both")
+
+Viewing the first real run showed a gap: a cached step started no tracker run, so the
+only run holding the training curves aged out of view while later runs showed
+evaluate and register alone. Three more optional Tracker members, same fallback rule
+as item 4 (a tracker without them still works, ungrouped):
+
+- `start_pipeline(run_id, tag)` / `end_pipeline(status)`: the pipeline brackets each
+  run, so `MlflowTracker` makes one parent run per pipeline run with the steps nested
+  beneath it.
+- `log_cached(manifest)`: a cache hit gets a small child run (params, the manifest's
+  scalar metrics, `mlpipe.source_run_id` and a note linking the run that executed the
+  signature, where its curves and charts are). Curves and artifacts are linked, not
+  copied again.
+- Every run is tagged `mlpipe.run_id` (the manifests' `run_id`), `mlpipe.pipeline`,
+  `mlpipe.kind`, and on steps `mlpipe.step`, `mlpipe.signature`, `mlpipe.cached`.
+
+None of this enters a signature, so no pipeline re-runs. Core grows by 21 lines
+(725 → 746).
+
 ## Alternatives considered
 
 - **Curves only in MLflow.** That breaks "losing `mlruns/` loses zero provenance".

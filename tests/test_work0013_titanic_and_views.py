@@ -252,6 +252,39 @@ def test_work0013_curve_summary_direction():
     assert s["auc"]["final_iteration"] == 3
 
 
+def test_work0013_mlflow_groups_steps_and_links_cache_hits(titanic, tmp_path):
+    import mlflow
+
+    from mlpipe.trackers.mlflow_tracker import MlflowTracker
+
+    cfg, store, manifests = titanic
+    uri = f"sqlite:///{tmp_path}/mlflow.db"
+    ids = []
+    for _ in range(2):  # the second run is all cache hits
+        tracker = MlflowTracker(uri, experiment="t", pipeline="titanic-example")
+        result = Pipeline(build_steps(), store, manifests, cfg, tracker=tracker).run()
+        ids.append(result["manifests"][0]["run_id"])
+
+    client = mlflow.MlflowClient(uri)
+    exp = client.get_experiment_by_name("t").experiment_id
+    runs = client.search_runs([exp], max_results=100)
+    parents = [r for r in runs if r.data.tags.get("mlpipe.kind") == "pipeline"]
+    assert {p.data.tags["mlpipe.run_id"] for p in parents} == set(ids)
+    assert all(p.info.status == "FINISHED" for p in parents)
+    names = [s.name for s in build_steps()]
+    for parent in parents:
+        kids = [r for r in runs if r.data.tags.get("mlflow.parentRunId") == parent.info.run_id]
+        assert sorted(k.data.tags["mlpipe.step"] for k in kids) == sorted(names)
+    (again,) = [p for p in parents if p.data.tags["mlpipe.run_id"] == ids[1]]
+    cached = {r.data.tags["mlpipe.step"]: r for r in runs
+              if r.data.tags.get("mlflow.parentRunId") == again.info.run_id}
+    assert {r.data.tags["mlpipe.cached"] for r in cached.values()} == {"true"}
+    source = client.get_run(cached["train"].data.tags["mlpipe.source_run_id"])
+    assert source.data.tags["mlpipe.run_id"] == ids[0] and source.data.tags["mlpipe.cached"] == "false"
+    assert len(client.get_metric_history(source.info.run_id, "fold0_valid_auc")) == ROUNDS
+    assert "val_roc_auc" in cached["evaluate"].data.metrics  # scalars copied from the manifest
+
+
 def test_work0013_mlflow_params_flatten_the_step_config():
     p = flat_params({"model": {"kind": "lightgbm", "params": {"num_leaves": 15}}, "target": "y"})
     assert p == {"model.kind": "lightgbm", "model.params.num_leaves": "15", "target": "y"}

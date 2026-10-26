@@ -114,6 +114,7 @@ def test_cycle7_mlflow_two_runs_comparable_and_disposable(env, tmp_path):
 
     mlflow.set_tracking_uri(uri)
     runs = mlflow.search_runs(experiment_names=["test-exp"])
+    runs = runs[runs["tags.mlpipe.kind"] == "step"]  # each under its pipeline run's parent
     assert len(runs) == 2  # side-by-side comparable
     assert set(runs["params.tag"]) == {"a", "b"}
     assert runs["metrics.mean_corr"].notna().all()

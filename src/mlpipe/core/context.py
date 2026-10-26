@@ -34,6 +34,15 @@ class NoopTracker:
     def log_artifact(self, artifact: Artifact) -> None:
         pass
 
+    def start_pipeline(self, run_id: str, tag: str | None) -> None:
+        pass
+
+    def end_pipeline(self, status: str) -> None:
+        pass
+
+    def log_cached(self, manifest: dict[str, Any]) -> None:
+        pass
+
 
 class RunContext(interfaces.RunContext):
     """Implements the port; the pipeline reads the per-step bookkeeping."""

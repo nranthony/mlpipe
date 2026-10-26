@@ -153,9 +153,12 @@ for the authoritative signatures. Summary:
 - `Tracker` (port): `start_run(manifest)`, `log_metrics`, `register_model`, and the
   ADR-0010 views `log_curve(name, values)` and `log_artifact(artifact)`: after a step
   succeeds the pipeline hands it every `.html`/`.json` output. A tracker without them
-  still works (curves fall back to step-indexed `log_metrics`). Impl: `MlflowTracker`
-  (also logs the step's config subtree as `cfg.*` params). Must be a thin view — no
-  logic lives here.
+  still works (curves fall back to step-indexed `log_metrics`). Also optional:
+  `start_pipeline`/`end_pipeline` bracket each pipeline run and `log_cached(manifest)`
+  reports a cache hit (ADR-0010 addendum). Impl: `MlflowTracker` (a parent run per
+  pipeline run, a child per step, cached ones linking the run that executed them;
+  `mlpipe.*` tags; the step's config subtree as `cfg.*` params). Must be a thin view —
+  no logic lives here.
 - `ModelBackend` (port): `fit(X, y, params)`, `predict(X)`. Optional richer protocol
   `CurveBackend` (ADR-0010): `fit(..., eval_set=None)`, `history()`,
   `feature_importance()`; the train step detects it by `history`.

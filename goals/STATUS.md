@@ -620,6 +620,17 @@ Log:
 
     Checked in `mlruns/mlflow.db`: the train run holds 8,005 metric points and 13
     params; the profile and eval runs carry their HTML/JSON as named artifacts.
+
+    Grouping (follow-up, ADR-0010 addendum): in the host UI the curves seemed missing,
+    because train ran once and every later run was a cache hit, which logged nothing.
+    Now each pipeline run is a parent MLflow run with every step nested under it;
+    cached steps get a small run (scalar metrics, `mlpipe.source_run_id`, a note
+    linking the run that executed them). All runs carry `mlpipe.*` tags. Checked on
+    the real DB: a cached rerun gave parent `titanic-example-d9d5c80e` with 8 cached
+    children, `train-3ae69f86 (cached)` linking the original `train-3ae69f86`.
+
+    Host UI (confirmed by the human):
+    `uv run --extra track mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db`.
   - **Agent reports:**
     - `mlpipe show [--step] [--json]` (read-only);
     - `mlpipe.report.write_report` (theme-aware page that lists the hashes it read);
@@ -630,11 +641,12 @@ Log:
     (survival by title × class, OOF accuracy per cell, the 12 most confident misses,
     rounds needed), published privately at
     https://claude.ai/artifact/2KJb5X7WQqxesQgmhUkK2f.
-  - **Measured:** 209 tests pass (16 new in `test_work0013_titanic_and_views.py`),
+  - **Measured:** 210 tests pass (17 new in `test_work0013_titanic_and_views.py`),
     ruff clean.
-  - **Core size:** orchestration 707 → 725 lines. The +18 lines are the
-    `log_curve`/`log_artifact` fallbacks and the artifact hand-off: the minimum for
-    trackers that predate ADR-0010 to keep working.
+  - **Core size:** orchestration 707 → 746 lines. The +18 lines are the
+    `log_curve`/`log_artifact` fallbacks and the artifact hand-off; the +21 are the
+    optional grouping hooks (`start_pipeline`/`end_pipeline` around a run,
+    `log_cached` on a hit). Each is the minimum that keeps trackers predating it working.
   - **Pending:**
     - numerai-example's train, evaluate and register re-run once on the next real
       run (~30 min). Its own evaluate is unchanged, but train now also builds a

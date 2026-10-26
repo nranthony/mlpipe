@@ -134,11 +134,21 @@ class Pipeline:
         # Upstream of --from is resolved by signature under the CURRENT config and
         # must be a cache hit: --from asserts "upstream is cached", it never serves
         # outputs some other config produced (work/0004 C).
-        upstream = [
-            self._run_step(s, ctx, config, tag, env, run_id, from_step=from_step)
-            for s in self.steps[:lo]
-        ]
-        written = [self._run_step(s, ctx, config, tag, env, run_id) for s in self.steps[lo:hi]]
+        # One tracker parent run per pipeline run, steps beneath it (ADR-0010).
+        grouped = hasattr(self.tracker, "start_pipeline")
+        if grouped:
+            self.tracker.start_pipeline(run_id, tag)
+        status = "failed"
+        try:
+            upstream = [
+                self._run_step(s, ctx, config, tag, env, run_id, from_step=from_step)
+                for s in self.steps[:lo]
+            ]
+            written = [self._run_step(s, ctx, config, tag, env, run_id) for s in self.steps[lo:hi]]
+            status = "success"
+        finally:
+            if grouped:
+                self.tracker.end_pipeline(status)
         return {"artifacts": dict(ctx.registry), "manifests": upstream + written}
 
     def resolved_config(self, overrides: list[str] | None = None) -> dict:
@@ -199,6 +209,8 @@ class Pipeline:
                 "ended_at": _now(),
             }
             self.log.write(record)
+            if hasattr(self.tracker, "log_cached"):  # so the run's view lists every step
+                self.tracker.log_cached(record)
             return record
         if from_step is not None:
             raise RuntimeError(

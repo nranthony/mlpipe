@@ -46,7 +46,7 @@ def run(
 ) -> None:
     steps, serve, cfg, top = _load(pipeline, config)
     log_dir = _log_dir(pipeline, manifests_dir)
-    pipe = Pipeline(steps, LocalCasStore(store_dir), log_dir, cfg, _make_tracker(top),
+    pipe = Pipeline(steps, LocalCasStore(store_dir), log_dir, cfg, _make_tracker(top, pipeline),
                     sibling_steps=_siblings(steps + serve, steps))
     result = pipe.run(from_step, to_step, overrides=set_, tag=tag)
     for m in result["manifests"]:
@@ -104,11 +104,11 @@ def _module(pipeline: str):
         raise typer.BadParameter(exc.args[0], param_hint="--pipeline") from None
 
 
-def _make_tracker(top: PipelineConfig):
+def _make_tracker(top: PipelineConfig, pipeline: str):
     if top.tracker.kind == "mlflow":
         from mlpipe.trackers.mlflow_tracker import MlflowTracker
 
-        return MlflowTracker(top.tracker.uri, top.tracker.experiment)
+        return MlflowTracker(top.tracker.uri, top.tracker.experiment, pipeline=pipeline)
     return None
 
 
@@ -132,7 +132,7 @@ def tune(
     if tcfg is None:
         raise typer.BadParameter(f"pipeline {pipeline!r} config has no `tune` section")
     log_dir = _log_dir(pipeline, manifests_dir)
-    pipe = Pipeline(steps, LocalCasStore(store_dir), log_dir, cfg, _make_tracker(top),
+    pipe = Pipeline(steps, LocalCasStore(store_dir), log_dir, cfg, _make_tracker(top, pipeline),
                     sibling_steps=_siblings(steps + serve, steps))
     study =optuna.create_study(
         study_name=tcfg.study,
@@ -212,7 +212,7 @@ def promote(
     # plan_hash/target are optional: a bundle from a pipeline without CV or a
     # single named target still promotes; the pin records what the bundle has.
     plan_hash, target = content.get("plan_hash"), content.get("target")
-    tracker = _make_tracker(_load(pipeline, config)[3])
+    tracker = _make_tracker(_load(pipeline, config)[3], pipeline)
     version = None
     if tracker is not None:
         meta = {"plan_hash": plan_hash} if plan_hash else {}
