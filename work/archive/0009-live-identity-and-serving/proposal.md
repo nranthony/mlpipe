@@ -1,6 +1,6 @@
 # Proposal: Live-data identity and a serve pipeline with lineage
 
-- Status: Accepted → [ADR-0007](../../docs/adr/0007-serve-pipeline-and-named-inputs.md) (2026-10-23); next is a spec
+- Status: Accepted → [ADR-0007](../../../docs/adr/0007-serve-pipeline-and-named-inputs.md) (2026-10-23); built and archived 2026-10-26 (see spec.md)
 - Author: Claude, from numerai `work/0012-ml-core-review` §5 (P0-2, P1-18; mlops C9, C14,
   C15), re-checked here 2026-10-22
 - Decision on acceptance: ADR-0007 "Serving is a pipeline; inputs that change over time

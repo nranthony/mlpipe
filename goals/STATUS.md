@@ -7,13 +7,13 @@
   correctness; archived). Step 14 (numerai adoption, pinned to `v0.2.0`) is unblocked
   and driven from the numerai side (its work/0012 review). work/0010 (hygiene) built
   and archived. ADR-0007 / work/0009 (serve pipeline, inputs named in config) built
-  2026-10-24; open until the real-data cache-hit proof (needs the snapshot copy, a
-  human step). ADR-0008 (optional step 15, Copier template) accepted; waits for step
-  14's first cache hit.
+  2026-10-24, real-data cache hit 2026-10-26, archived. A real serve run (`predict
+  --set ingest_live.round=N`) is still untried. ADR-0008 (optional step 15, Copier
+  template) accepted; waits for step 14's first cache hit.
 - Data: Numerai **v6.0** (v5.x training files are no longer served). Raw files are in
   `/workspace/raw_data/numerai/v6.0` (downloaded host-side 2026-10-20). Since work/0009
-  the example reads `v6.0/2026-10-20/` (to be copied there, not moved: the folder is
-  shared) and live files from `v6.0/live/<round>/`.
+  the example reads `v6.0/2026-10-20/` (copied there 2026-10-26, not moved: the folder
+  is shared) and live files from `v6.0/live/<round>/`.
 - Real data: the example's comparable baseline is the 2026-10-23 v6.0 run (work/0010):
   plan `8b92bc2c`, bundle `1d3c948c`, purge 12, `numerai_corr` scorer, `val_*` skipping
   12 boundary eras. OOF mean_corr 0.0305 (sharpe 1.92), val_mean_corr 0.0193 (sharpe
@@ -523,3 +523,16 @@ Log:
     ingest and validate, with bundle `1d3c948c` cached (the cache-hit proof). A real
     `predict --set ingest_live.round=<current>` needs the Numerai API, probably from
     the host.
+- 2026-10-26 — **work/0009 real-data cache hit; archived.**
+  - The human copied train, validation and features.json into `v6.0/2026-10-20/`
+    (`cp -p`; the flat files stay).
+  - `mlpipe run --pipeline numerai`:
+    - ingest (sig `9c32caf4`) and validate (`65cc2727`) re-ran, as expected (new
+      config and code). The raw hashes are unchanged (`bbfd61b4`, `c1a8bbf2`,
+      `9152ccfc`).
+    - clean, features, cvplan (plan `973fa231`), train and evaluate were all cached.
+    - register re-ran (`d0e7d32c`), not predicted: `dbfedd2` edited a comment in
+      `steps/register.py`, which changed its code hash. It wrote the same bytes:
+      bundle `1d3c948c`, unchanged.
+  - Nothing promoted. A real serve run is still untried: it needs a promoted bundle
+    and the Numerai API.

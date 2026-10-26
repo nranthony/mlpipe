@@ -1,8 +1,9 @@
 # Spec: serve pipeline and inputs named in config (work/0009)
 
-- Status: Ready 2026-10-24. Cross-checked by a fresh-context review the same day; its 17
-  findings are folded in (the "Review" section at the end lists them).
-- Decision: [ADR-0007](../../docs/adr/0007-serve-pipeline-and-named-inputs.md)
+- Status: **Done 2026-10-26.** Built 2026-10-24 (`6aec62f`, `dbfedd2`); real-data cache
+  hit 2026-10-26 (see goals/STATUS.md). Cross-checked by a fresh-context review on
+  2026-10-24; its 17 findings are folded in (the "Review" section at the end lists them).
+- Decision: [ADR-0007](../../../docs/adr/0007-serve-pipeline-and-named-inputs.md)
   (Accepted 2026-10-23). This spec says how; the ADR says what and why.
 - Scope: this repo only. Part A is the library (`core/`, `steps/`, `cli.py`); part B is
   the Numerai example (`examples/numerai/`). Nothing here touches a host repo. Part A
