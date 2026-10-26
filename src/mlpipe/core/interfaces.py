@@ -69,6 +69,10 @@ class Tracker(Protocol):
     def register_model(self, artifact: Artifact, name: str) -> str | None: ...
     def set_alias(self, name: str, alias: str, version: str) -> None: ...
     def end_run(self, status: str) -> None: ...
+    # Views only (ADR-0010): the store holds the canonical copy of both. Trackers
+    # predating them may omit them; the pipeline and RunContext then fall back.
+    def log_curve(self, name: str, values: list[float]) -> None: ...
+    def log_artifact(self, artifact: Artifact) -> None: ...
 
 
 @runtime_checkable
@@ -84,6 +88,23 @@ class ModelBackend(Protocol):
         params: dict[str, Any],
     ) -> None: ...
     def predict(self, X: pl.DataFrame) -> np.ndarray: ...
+
+
+@runtime_checkable
+class CurveBackend(ModelBackend, Protocol):
+    """Optional richer port (ADR-0010). A backend with `history` also accepts an
+    eval set in `fit`; the train step passes each fold's validation rows and
+    stores the per-iteration history and the importances as artifacts."""
+
+    def fit(
+        self,
+        X: pl.DataFrame,
+        y: np.ndarray,
+        params: dict[str, Any],
+        eval_set: tuple[pl.DataFrame, np.ndarray] | None = None,
+    ) -> None: ...
+    def history(self) -> dict[str, list[float]]: ...  # "<split>_<metric>" -> per iteration
+    def feature_importance(self) -> dict[str, float] | None: ...
 
 
 # --------------------------------------------------------------------------- core
@@ -130,6 +151,11 @@ class RunContext(ABC):
     @abstractmethod
     def log_metric(self, name: str, value: float) -> None:
         """Numeric metric: into the manifest and to the tracker."""
+
+    @abstractmethod
+    def log_curve(self, name: str, values: list[float]) -> None:
+        """Per-iteration series, to the tracker only: the step also puts it as an
+        artifact, which is the record (ADR-0010)."""
 
     @abstractmethod
     def log_meta(self, key: str, value: Any) -> None:

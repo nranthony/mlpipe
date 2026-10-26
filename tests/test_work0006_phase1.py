@@ -149,7 +149,7 @@ def test_tune_space_is_typed_and_direction_defaults_to_maximize():
         )
 
 
-@pytest.mark.parametrize("name", ["demo", "demo-tabular", "numerai-example"])
+@pytest.mark.parametrize("name", ["demo", "demo-tabular", "numerai-example", "titanic-example"])
 def test_shipped_default_configs_validate(name):
     from mlpipe.plugins import pipeline_module
 

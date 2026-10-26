@@ -369,6 +369,59 @@ def lineage(
                    f"commit={(m['git_commit'] or '?')[:8]} inputs={list(m['inputs'])}")
 
 
+def latest_by_step(entries: list[dict], order: list[str]) -> list[dict]:
+    """The newest completed manifest per step, in pipeline order (steps the module
+    no longer lists come last)."""
+    latest = {m["step"]: m for m in entries if m["status"] in ("success", "cached")}
+    rank = {name: i for i, name in enumerate(order)}
+    return sorted(latest.values(), key=lambda m: rank.get(m["step"], len(rank)))
+
+
+@app.command()
+def show(
+    pipeline: str = PIPELINE,
+    step: list[str] = typer.Option(None, "--step", help="only these steps (repeatable)"),
+    as_json: bool = typer.Option(False, "--json", help="full records, for agents and scripts"),
+    store_dir: Path = typer.Option(Path("store")),
+    manifests_dir: Path = MANIFESTS,
+) -> None:
+    """Read-only map from each step's latest completed run to its outputs' store
+    files: what a report (ADR-0010) reads. Prints no data and writes nothing."""
+    import json
+
+    from mlpipe.core.manifest import ManifestLog
+
+    module = _module(pipeline)
+    order = [s.name for s in module.build_steps() + _serve_steps(module)]
+    store = LocalCasStore(store_dir)
+    records = [m for m in latest_by_step(ManifestLog(_log_dir(pipeline, manifests_dir)).entries(), order)
+               if not step or m["step"] in step]
+    if not records:
+        raise typer.BadParameter(f"no completed manifests for {pipeline!r}"
+                                 + (f" steps {step}" if step else ""))
+    out = []
+    for m in records:
+        outputs = {}
+        for key, h in m["outputs"].items():
+            path = store.path_of(h) if store.exists(h) else None
+            outputs[key] = {"hash": h, "path": str(path) if path else None,
+                            "format": path.suffix.lstrip(".") if path else None}
+        out.append({k: m.get(k) for k in ("step", "status", "signature", "run_id", "ended_at",
+                                          "tag", "git_commit", "config", "metrics", "meta")}
+                   | {"outputs": outputs})
+    if as_json:
+        typer.echo(json.dumps(out, indent=2, default=str))
+        return
+    for r in out:
+        typer.echo(f"{r['step']:<14} {r['status']:<7} sig={r['signature'][:8]} "
+                   f"at={(r['ended_at'] or '')[:19]}")
+        for key, o in r["outputs"].items():
+            typer.echo(f"    {key:<20} {o['hash'][:8]}  {o['path'] or '(not in store)'}")
+        if r["metrics"]:
+            shown = ", ".join(f"{k}={v:.4g}" for k, v in sorted(r["metrics"].items()))
+            typer.echo(f"    metrics: {shown}")
+
+
 def _gb(paths) -> str:
     return f"{sum(p.stat().st_size for p in paths) / 1e9:.2f} GB"
 

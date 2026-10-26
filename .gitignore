@@ -222,6 +222,7 @@ data/
 store/
 manifests/
 mlruns/
+reports/
 
 # Agent-native conventions (see AGENTS.md)
 AGENTS.local.md

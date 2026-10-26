@@ -26,12 +26,12 @@ current system. Work proceeds in cycles defined by `goals/cycleN_*.md`, one at a
   (`NNNN-slug/`: proposal → spec → plan → notes; archive on completion)
 - Promoted baseline (written only by `mlpipe promote`, ADR-0006) → `baselines.yaml`
   (absent until the first promote)
-- Run data (gitignored, local): `store/` (shared CAS), `manifests/<pipeline>/`, `mlruns/`
+- Run data (gitignored, local): `store/` (shared CAS), `manifests/<pipeline>/`, `mlruns/`,
+  and agent reports in `reports/<pipeline>/` (ADR-0010)
 - Template extraction ownership zones → [TEMPLATE_OWNERSHIP.md](TEMPLATE_OWNERSHIP.md)
-- Repo procedures → `.claude/skills/` (currently none: `/next-cycle` was retired with
-  the cycle build; the directory returns when a repo-specific procedure does, e.g.
-  `/template-sync`). Shared procedures (`/myconv:make-plan`, `/myconv:wrap-up`, …)
-  arrive via the myconv plugin, never copied into this repo
+- Repo procedures → `.claude/skills/`: `report` (an agent report from stored artifacts,
+  ADR-0010). Shared procedures (`/myconv:make-plan`, `/myconv:wrap-up`, …) arrive via
+  the myconv plugin, never copied into this repo
 - Human onboarding → [README.md](README.md)
 
 ## Hard rules
@@ -54,6 +54,8 @@ current system. Work proceeds in cycles defined by `goals/cycleN_*.md`, one at a
   the schema, extend the schema first; never bypass validation.
 - Every run goes through the CLI (`mlpipe run` / `tune` / `promote` / `predict` / `lineage`),
   never by importing internals — this guarantees a manifest exists for every execution.
+  Reports only read: they find artifacts with `mlpipe show` and never write to
+  `store/` or `manifests/` (the `report` skill).
 - GPU budget is 12 GB VRAM. Flag any model config that would exceed it before running.
 - No hosted/cloud storage of run data. Local only. Never commit secrets.
 

@@ -9,7 +9,9 @@
   and archived. ADR-0007 / work/0009 (serve pipeline, inputs named in config) built
   2026-10-24, real-data cache hit 2026-10-26, archived. Real serve runs 2026-10-26
   (rounds 1384 and 1378, bundle `1d3c948c`, not promoted) pass. ADR-0008 (optional step 15, Copier
-  template) accepted; waits for step 14's first cache hit.
+  template) accepted; waits for step 14's first cache hit. work/0013 (Titanic example,
+  viewing surfaces, ADR-0010) built 2026-10-26; the Kaggle test.csv serve path is left
+  for a later item.
 - Data: Numerai **v6.0** (v5.x training files are no longer served). Raw files are in
   `/workspace/raw_data/numerai/v6.0` (downloaded host-side 2026-10-20). Since work/0009
   the example reads `v6.0/2026-10-20/` (copied there 2026-10-26, not moved: the folder
@@ -586,3 +588,57 @@ Log:
     - `baselines.yaml` was deleted (approved).
     - The human approved deleting `manifests/numerai/` (gitignored run data).
     - work/0012 archived.
+- 2026-10-26 — **work/0013 built: Titanic example and viewing surfaces (ADR-0010,
+  accepted).** All four phases are in; the Kaggle test.csv serve path is deferred to a
+  later item.
+  - **`titanic-example`** (`examples/titanic/`): the generic `IngestFileStep`
+    (`steps/ingest_file.py`; CSV/parquet under `download_dir`, each file pinned by
+    sha256, since an ingest signature is config-only) reads
+    `../raw_data/kaggle/titanic/train.csv`. A Titanic clean step derives 13
+    `feature_*` columns and a seeded, stratified 20% holdout. The rest is the generic
+    chain with `lightgbm_binary`. A full run takes 4 s.
+  - **Real run:**
+    - plan `9bb6921d`;
+    - OOF accuracy 0.823, ROC-AUC 0.860;
+    - holdout accuracy 0.843, ROC-AUC 0.857, log-loss 0.482;
+    - bundle `5ce94ca3` (not promoted).
+
+    Curves: mean validation log-loss is best at round 88 of 400 (AUC at 117), so the
+    default config overfits. Left as is, as a visible example. A rerun was fully
+    cached.
+  - **Curves and importance:** the optional `CurveBackend` protocol (LightGBM per
+    round, torch per epoch). Train writes `train_history` and `feature_importance`,
+    and logs step-indexed curves via the new `RunContext.log_curve`.
+  - **Charts:**
+    - `ProfileStep` writes `data_profile` and `profile_chart`;
+    - `TabularEvalStep` writes `eval_chart` and a `curves` summary;
+    - chart pages are byte-stable (fixed plotly div ids).
+  - **MLflow:**
+    - the Tracker port gains `log_curve` (batched) and `log_artifact`;
+    - the pipeline hands every `.html`/`.json` output to `log_artifact`;
+    - `cfg.*` params come from each step's config.
+
+    Checked in `mlruns/mlflow.db`: the train run holds 8,005 metric points and 13
+    params; the profile and eval runs carry their HTML/JSON as named artifacts.
+  - **Agent reports:**
+    - `mlpipe show [--step] [--json]` (read-only);
+    - `mlpipe.report.write_report` (theme-aware page that lists the hashes it read);
+    - the `report` skill;
+    - gitignored `reports/`.
+
+    First report: `reports/titanic-example/2026-10-26-survival-and-errors.html`
+    (survival by title × class, OOF accuracy per cell, the 12 most confident misses,
+    rounds needed), published privately at
+    https://claude.ai/artifact/2KJb5X7WQqxesQgmhUkK2f.
+  - **Measured:** 209 tests pass (16 new in `test_work0013_titanic_and_views.py`),
+    ruff clean.
+  - **Core size:** orchestration 707 → 725 lines. The +18 lines are the
+    `log_curve`/`log_artifact` fallbacks and the artifact hand-off: the minimum for
+    trackers that predate ADR-0010 to keep working.
+  - **Pending:**
+    - numerai-example's train, evaluate and register re-run once on the next real
+      run (~30 min). Its own evaluate is unchanged, but train now also builds a
+      validation dataset per fold, so watch memory.
+    - MLflow experiment artifact paths are absolute (`/workspace/mlpipe/mlruns/<id>`),
+      so a host UI whose checkout lives at a different path will not open artifacts
+      logged from the sandbox.

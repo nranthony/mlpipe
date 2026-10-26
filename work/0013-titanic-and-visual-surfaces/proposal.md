@@ -1,6 +1,15 @@
 # Proposal: Titanic example and the visual surfaces (MLflow + agent reports)
 
-- Status: Draft
+- Status: Accepted → [ADR-0010](../../docs/adr/0010-viewing-surfaces-curves-charts-reports.md)
+  (2026-10-26). Answers: (1) A+B first, then C/D, all built the same day;
+  (2) test.csv serve path later; (3) reports both local and publishable.
+  Built 2026-10-26 (goals/STATUS.md).
+  - Open before archiving: the human looks at the MLflow UI (curves, params,
+    artifacts) and the first report.
+  - Differences from the plan:
+    - the curve summary also lands in `eval_report` and as `best_iteration_*`
+      metrics;
+    - the report page lives in `mlpipe/report.py`, so every report shares one layout.
 - Author: Claude, from the user's ask (2026-10-26): use Titanic to see the features,
   training curves and other interfaces mlpipe should expose to a data scientist
 - Related: [ADR-0005](../../docs/adr/0005-generic-library-numerai-as-example.md)

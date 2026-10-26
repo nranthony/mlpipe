@@ -52,10 +52,14 @@ class TorchMLPBackend:
         X: pl.DataFrame,
         y: np.ndarray,
         params: dict[str, Any],
+        eval_set: tuple[pl.DataFrame, np.ndarray] | None = None,
     ) -> None:
         import torch
 
         p = {**DEFAULTS, **params}
+        self._history: dict[str, list[float]] = {"train_mse": []}
+        if eval_set is not None:
+            self._history["valid_mse"] = []
         self._params = p
         estimate = estimate_vram_gb(X.width, p["hidden"], p["batch_size"])
         if estimate > p["vram_budget_gb"]:
@@ -73,7 +77,9 @@ class TorchMLPBackend:
         target = torch.from_numpy(y.astype(np.float32)).unsqueeze(1)
         n = len(target)
         for _ in range(p["epochs"]):
+            model.train()
             perm = torch.randperm(n)
+            total = 0.0
             for start in range(0, n, p["batch_size"]):
                 idx = perm[start : start + p["batch_size"]]
                 optimizer.zero_grad()
@@ -82,6 +88,13 @@ class TorchMLPBackend:
                 )
                 loss.backward()
                 optimizer.step()
+                total += loss.detach().item() * len(idx)
+            self._history["train_mse"].append(total / n)  # mean over the epoch's batches
+            if eval_set is not None:
+                self._model = model.eval()
+                pred = self.predict(eval_set[0])
+                self._history["valid_mse"].append(float(np.mean((pred - eval_set[1]) ** 2)))
+                model = self._model.to(device)
         self._model = model.eval().cpu()  # stored on CPU: picklable, portable
 
     def predict(self, X: pl.DataFrame) -> np.ndarray:
@@ -96,3 +109,9 @@ class TorchMLPBackend:
                 outs.append(model(features[start : start + 65536].to(device).float()).cpu())
         self._model = model.cpu()
         return torch.cat(outs).squeeze(1).numpy()
+
+    def history(self) -> dict[str, list[float]]:
+        return {k: list(v) for k, v in getattr(self, "_history", {}).items()}
+
+    def feature_importance(self) -> dict[str, float] | None:
+        return None  # no cheap, honest gain for an MLP

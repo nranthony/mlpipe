@@ -121,8 +121,8 @@ pass that record to `gc --root-file`, so the champion's lineage stays a gc root.
 | 3 | Clean & transform | validated → `clean_table` + `clean_validation` + `serve_recipe` | Stateless only. `serve_recipe` (cleaner + source era column) is what serving replays on live rows; register takes it as an input. Renames the source's era column to the canonical `era` (v6.0: `date`) and drops `exclude_features`, so nothing downstream knows source names. Same input ⇒ same output. Polars exprs; validation cleaned with the same exprs so downstream skew checks have a target. |
 | 4 | Feature engineering | clean → `feature_table` + `feature_validation` + `fitted_transformer` | Fitted transforms learn from train only and are **unsupervised**: `fit` sees the feature matrix, never the target. A target-aware transform (target encoding, supervised selection) fitted here would leak across CV folds, so it fits per fold inside the ModelBackend instead. The transformer is a versioned artifact that travels with the model; `feature_validation` is what the skew guard compares against. |
 | 5 | Split / CV plan | feature table + cv config → `fold_plan` | Era-aware, purged, embargoed. Eras are sorted into time order (ISO dates and padded ids as strings, `(len, str)` for unpadded ids), never taken in row order. The plan is an artifact with its own hash; model comparisons must cite the same plan hash. The `FoldPlan` type is domain-free (`folds`, `plan_hash`, `group_column`, `meta`): era, purge and embargo are this step's semantics and travel in `meta`. Generic alternative for the same slot: `GroupKFoldStep` (`steps/groupcv.py`; a group never straddles a split; no group column = shuffled row k-fold). |
-| 6 | Train & tune | features + fold_plan + model config → `model`, `oof_preds` | Via ModelBackend port. `model` is a `{full, fold_models}` bundle so stored state alone reproduces OOF (5x size, no retraining needed for audit). Optuna via `mlpipe tune`. |
-| 7 | Evaluate | model + oof_preds + fold_plan + feature_validation → `eval_report` + `eval_chart` (metrics JSON + standalone plotly HTML) | Era-wise corr, sharpe, drawdown, feature exposure — for OOF (`mean_corr`, …) and for the full model on the validation holdout (`val_mean_corr`, …), side by side. Eras with unresolved targets are skipped, and so are the first `purge_eras` validation eras, whose labels overlap the full model's last train eras (`val_skipped_eras` in the report). The per-era scorer is configured by import path (`evaluate.scorer: "pkg.mod:fn"`, declared via `code_deps`); the step default is rank-Pearson, the Numerai example uses a `numerai_corr` port. Payout-accurate scoring (NCORR, MMC) is the host's job. A host's frozen holdout must never be the input of a cached step: every run would spend it. Log metrics to MLflow. Generic alternative for the same slot: `TabularEvalStep` (`task: regression` → rmse, mae, r2, corr; `task: binary` → roc_auc, pr_auc, log_loss, brier, accuracy, which need probabilities, so use a classifier backend such as `lightgbm_binary` whose `predict` returns P(y=1)). |
+| 6 | Train & tune | features + fold_plan + model config → `model`, `oof_preds`, `train_history`, `feature_importance` | Via ModelBackend port. `model` is a `{full, fold_models}` bundle so stored state alone reproduces OOF (5x size, no retraining needed for audit). A backend with the optional CurveBackend members (ADR-0010) gets each fold's validation rows as an eval set: its per-iteration history (`fold, iteration, split, metric, value`) and gain importances (per fold model and full) are artifacts, and the curves also go to the tracker step-indexed. Other backends give empty frames. Optuna via `mlpipe tune`. |
+| 7 | Evaluate | model + oof_preds + fold_plan + feature_validation → `eval_report` + `eval_chart` (metrics JSON + standalone plotly HTML) | Era-wise corr, sharpe, drawdown, feature exposure — for OOF (`mean_corr`, …) and for the full model on the validation holdout (`val_mean_corr`, …), side by side. Eras with unresolved targets are skipped, and so are the first `purge_eras` validation eras, whose labels overlap the full model's last train eras (`val_skipped_eras` in the report). The per-era scorer is configured by import path (`evaluate.scorer: "pkg.mod:fn"`, declared via `code_deps`); the step default is rank-Pearson, the Numerai example uses a `numerai_corr` port. Payout-accurate scoring (NCORR, MMC) is the host's job. A host's frozen holdout must never be the input of a cached step: every run would spend it. Log metrics to MLflow. Generic alternative for the same slot: `TabularEvalStep` (`task: regression` → rmse, mae, r2, corr; `task: binary` → roc_auc, pr_auc, log_loss, brier, accuracy, which need probabilities, so use a classifier backend such as `lightgbm_binary` whose `predict` returns P(y=1)). `TabularEvalStep` also reads `train_history` and `feature_importance` and writes an `eval_chart` (ROC, PR, calibration, confusion / predicted-vs-actual, curves, importance) and a `curves` summary (best vs final iteration per metric) in the report. Generic `ProfileStep` (`steps/profile.py`, ADR-0010): `clean_table` → `data_profile` + `profile_chart`; nothing consumes it, so it never invalidates training. |
 | 8 | Register & package | model + transformer + eval → `model_bundle` | The bundle holds model + fitted transformer + feature list + plan hash, plus the serving recipe when the pipeline declares one (`RegisterStep(recipe="serve_recipe")`: Numerai's clean emits the fill and source era column as an artifact). Registry versions are created only by `mlpipe promote` (ADR-0006). |
 
 **Serving (ADR-0007)** is a second step list in the same module and manifest log:
@@ -147,11 +147,18 @@ for the authoritative signatures. Summary:
 - `RunContext`: the only door steps have to the outside world. The whole step-facing
   surface is declared (abstract) in `interfaces.py` and a test holds steps to it:
   `config`; inputs `get`, `get_lazy`, `input_hashes`, `previous`; outputs `put`,
-  `put_alias`; records `log_metric`, `log_meta`.
+  `put_alias`; records `log_metric`, `log_meta`, `log_curve` (tracker only: the step
+  also puts the series as an artifact, ADR-0010).
 - `ArtifactStore` (port): `save`, `load`, `exists`. Impl: `LocalCasStore`.
-- `Tracker` (port): `start_run(manifest)`, `log_metrics`, `register_model`.
-  Impl: `MlflowTracker`. Must be a thin view — no logic lives here.
-- `ModelBackend` (port): `fit(X, y, params)`, `predict(X)`.
+- `Tracker` (port): `start_run(manifest)`, `log_metrics`, `register_model`, and the
+  ADR-0010 views `log_curve(name, values)` and `log_artifact(artifact)`: after a step
+  succeeds the pipeline hands it every `.html`/`.json` output. A tracker without them
+  still works (curves fall back to step-indexed `log_metrics`). Impl: `MlflowTracker`
+  (also logs the step's config subtree as `cfg.*` params). Must be a thin view — no
+  logic lives here.
+- `ModelBackend` (port): `fit(X, y, params)`, `predict(X)`. Optional richer protocol
+  `CurveBackend` (ADR-0010): `fit(..., eval_set=None)`, `history()`,
+  `feature_importance()`; the train step detects it by `history`.
   Impls: `LightGBMBackend`, `LightGBMBinaryBackend`, `TorchMLPBackend`. The train step
   owns the fold loop, so backends never see a `FoldPlan`, and it persists the fitted
   backend object itself (joblib, via the store), so an adapter must be picklable and
@@ -202,7 +209,13 @@ protocol. Plotting/metrics hide behind plain functions, not classes.
   reads every pipeline's manifests (the store is shared) and never deletes; removing
   the listed files is a human step.
 - **Read path:** manifests (grep-able JSON), MLflow UI + MLflow MCP server for run
-  comparison. Optional: generate plotly HTML comparisons from the tracking API.
+  comparison (scalar metrics, step-indexed training curves, `cfg.*` params, and each
+  run's HTML/JSON outputs as artifacts). `mlpipe show --pipeline <name> [--step S]
+  [--json]` maps each step's latest completed manifest to its outputs' store files,
+  read-only. **Agent reports** (ADR-0010) are scripts in gitignored
+  `reports/<pipeline>/<date>-<slug>.py` that load those files and call
+  `mlpipe.report.write_report`; the page lists every hash it read, and reports never
+  write to `store/` or `manifests/`. Procedure: the `report` skill.
 - Config typos must die at pydantic validation, not at hour six of training.
 - **Smoke runs** prove plumbing, not model quality: `--set clean.era_slice.n=100` (plus
   a small `feature_set`, few folds and few trees), always with `--tag smoke`. A slice
@@ -247,7 +260,10 @@ appear after the host package is (re)installed. Before the first tag:
   `numerai` pipeline name stays free (ADR-0009);
 - a second, non-Numerai pipeline passes (done: builtin `demo-tabular`,
   `mlpipe.steps.demo_tabular`, grouped customer data, regression and binary). The CLI
-  tests for register, promote, tune, predict and lineage run on it.
+  tests for register, promote, tune, predict and lineage run on it. A small real-data
+  harness, `titanic-example` (`mlpipe.examples.titanic`, Kaggle `train.csv` via the
+  generic `IngestFileStep`, which pins each file's sha256), runs in seconds and is where
+  the viewing surfaces are tried (work/0013).
 
 A Copier template, if built, carries **scaffolding only**: agent docs, ADR and `work/`
 conventions, a config skeleton and CLI wiring. It is built only after a host repo has

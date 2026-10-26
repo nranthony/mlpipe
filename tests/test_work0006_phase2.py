@@ -119,14 +119,18 @@ def test_work0006_steps_use_only_the_declared_run_context_surface():
 def test_work0006_run_context_surface_is_declared_and_implemented():
     assert declared_surface() == {
         "config", "get", "get_lazy", "input_hashes", "previous",
-        "put", "put_alias", "log_metric", "log_meta",
+        "put", "put_alias", "log_metric", "log_meta", "log_curve",
     }
     assert not context.RunContext.__abstractmethods__  # the implementation is complete
 
 
 def test_work0006_model_backend_fit_takes_no_fold_plan():
-    for cls in (interfaces.ModelBackend, LightGBMBackend, TorchMLPBackend):
-        assert list(inspect.signature(cls.fit).parameters) == ["self", "X", "y", "params"]
+    assert list(inspect.signature(interfaces.ModelBackend.fit).parameters) == [
+        "self", "X", "y", "params"]
+    # the optional CurveBackend members add an eval set, still no plan (ADR-0010)
+    for cls in (interfaces.CurveBackend, LightGBMBackend, TorchMLPBackend):
+        assert list(inspect.signature(cls.fit).parameters) == [
+            "self", "X", "y", "params", "eval_set"]
 
 
 def test_work0006_surface_check_catches_a_bypass(tmp_path):

@@ -1,11 +1,28 @@
 """MlflowTracker — thin view over our manifests (DESIGN.md §3). Index and
-viewing layer ONLY: losing mlruns/ must lose zero provenance."""
+viewing layer ONLY: losing mlruns/ must lose zero provenance. Curves and
+charts arrive here as copies of store artifacts (ADR-0010)."""
 
 from __future__ import annotations
 
+import shutil
+import tempfile
+import time
+from pathlib import Path
 from typing import Any
 
 from mlpipe.core.interfaces import Artifact
+
+BATCH = 1000  # MLflow's per-request metric limit
+
+
+def flat_params(node: Any, prefix: str = "") -> dict[str, str]:
+    """A step's config subtree as dotted MLflow params, values cut to MLflow's limit."""
+    if isinstance(node, dict) and node:
+        out: dict[str, str] = {}
+        for k, v in node.items():
+            out |= flat_params(v, f"{prefix}{k}.")
+        return out
+    return {prefix.rstrip("."): str(node)[:500]} if prefix else {}
 
 
 class MlflowTracker:
@@ -31,12 +48,38 @@ class MlflowTracker:
             "git_commit": (manifest.get("git_commit") or "")[:12],
             "tag": manifest.get("tag") or "",
         }
+        # the step's own config, so the UI can compare runs by hyperparameter
+        params |= {f"cfg.{k}": v for k, v in flat_params(manifest.get("config") or {}).items()}
         self._mlflow.log_params(params)
         return run.info.run_id
 
     def log_metrics(self, metrics: dict[str, float], step: int | None = None) -> None:
         if self._mlflow.active_run() is not None:
             self._mlflow.log_metrics(metrics, step=step)
+
+    def log_curve(self, name: str, values: list[float]) -> None:
+        """One request per thousand points; a step index per iteration, so the UI
+        draws a line chart."""
+        run = self._mlflow.active_run()
+        if run is None:
+            return
+        from mlflow.entities import Metric
+
+        now = int(time.time() * 1000)
+        points = [Metric(name, v, now, i) for i, v in enumerate(values)]
+        client = self._mlflow.MlflowClient()
+        for start in range(0, len(points), BATCH):
+            client.log_batch(run.info.run_id, metrics=points[start : start + BATCH])
+
+    def log_artifact(self, artifact: Artifact) -> None:
+        """Copied under its key (`eval_chart.html`), not its hash, so the UI's file
+        list is readable."""
+        if self._mlflow.active_run() is None:
+            return
+        with tempfile.TemporaryDirectory() as tmp:
+            named = Path(tmp) / f"{artifact.key}{artifact.path.suffix}"
+            shutil.copyfile(artifact.path, named)
+            self._mlflow.log_artifact(str(named))
 
     def register_model(self, artifact: Artifact, name: str) -> str:
         """Version for this bundle hash; reused if already registered (promote is

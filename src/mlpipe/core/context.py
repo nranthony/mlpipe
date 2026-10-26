@@ -28,6 +28,12 @@ class NoopTracker:
     def end_run(self, status: str) -> None:
         pass
 
+    def log_curve(self, name: str, values: list[float]) -> None:
+        pass
+
+    def log_artifact(self, artifact: Artifact) -> None:
+        pass
+
 
 class RunContext(interfaces.RunContext):
     """Implements the port; the pipeline reads the per-step bookkeeping."""
@@ -102,3 +108,10 @@ class RunContext(interfaces.RunContext):
     def log_metric(self, name: str, value: float) -> None:
         self.step_metrics[name] = float(value)
         self._tracker.log_metrics({name: float(value)})
+
+    def log_curve(self, name: str, values: list[float]) -> None:
+        if hasattr(self._tracker, "log_curve"):
+            self._tracker.log_curve(name, [float(v) for v in values])
+        else:  # a host tracker predating ADR-0010
+            for i, v in enumerate(values):
+                self._tracker.log_metrics({name: float(v)}, step=i)

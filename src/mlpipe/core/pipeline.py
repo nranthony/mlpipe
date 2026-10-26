@@ -52,6 +52,7 @@ def apply_overrides(config: dict, overrides: list[str] | None) -> dict:
 LOCKFILES = ("uv.lock", "poetry.lock", "pdm.lock", "pixi.lock", "requirements.lock")
 # Versions recorded in every manifest when installed (names only: nothing imported).
 PACKAGES = ("polars", "numpy", "pydantic", "scikit-learn", "lightgbm", "torch")
+VIEWABLE = (".html", ".json")  # outputs handed to the tracker as run artifacts
 
 
 def _versions(names: tuple[str, ...]) -> dict[str, str]:
@@ -227,6 +228,10 @@ class Pipeline:
             self.tracker.end_run("failed")
             raise
         self.log.write(record)
+        if hasattr(self.tracker, "log_artifact"):  # reports and charts, viewable there
+            for artifact in ctx.step_outputs.values():
+                if artifact.path.suffix in VIEWABLE:
+                    self.tracker.log_artifact(artifact)
         self.tracker.end_run("success")
         return record
 

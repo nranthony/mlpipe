@@ -5,7 +5,8 @@ template, if built, carries scaffolding only. See DESIGN.md §7.
 
 ## library  (ships in the `mlpipe` distribution; host repos never edit it)
 - src/mlpipe/core/**
-- src/mlpipe/cli.py, src/mlpipe/plugins.py
+- src/mlpipe/cli.py, src/mlpipe/plugins.py, src/mlpipe/report.py (agent-report page,
+  ADR-0010)
 - src/mlpipe/steps/** (generic steps, including `predict` and the `demo`/`demo-tabular`
   pipelines)
 - src/mlpipe/trackers/**, generic src/mlpipe/backends/**
@@ -14,18 +15,18 @@ template, if built, carries scaffolding only. See DESIGN.md §7.
 
 ## template-owned  (future scaffolding template; updates flow in, repos should not edit)
 - the managed sections of AGENTS.md; CLAUDE.md (thin @AGENTS.md stub)
-- .claude/skills/** (repo procedures, e.g. /template-sync once it exists)
+- .claude/skills/** (repo procedures: `report`; /template-sync once it exists)
 - .claude/settings.json
 
 ## skeleton  (template provides once at generation; repo owns thereafter)
 - the host package's steps/ and backends/ (here: examples/numerai/, the
-  `numerai-example` harness, ADR-0009)
+  `numerai-example` harness, ADR-0009; examples/titanic/, `titanic-example`)
 - configs/**
 - goals/**, DESIGN.md (project sections)
 - work/README.md, docs/adr/0000-template.md
 
 ## repo-owned  (template and library never touch)
-- data/**, store/**, manifests/**, mlruns/**
+- data/**, store/**, manifests/**, mlruns/**, reports/**
 - baselines.yaml
 - experiments/**, notebooks/**
 - docs/adr/** (except the template), work/** (except README), AGENTS.local.md

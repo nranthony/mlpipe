@@ -36,6 +36,7 @@ BUILTIN_PIPELINES = {
     "demo-tabular": "mlpipe.steps.demo_tabular",
     # "-example": a host's own Numerai pipeline keeps the plain name (ADR-0009)
     "numerai-example": "mlpipe.examples.numerai.pipeline",
+    "titanic-example": "mlpipe.examples.titanic.pipeline",
 }
 
 
