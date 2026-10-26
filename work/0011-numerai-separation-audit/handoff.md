@@ -6,6 +6,11 @@
 - Repos audited: `mlpipe` @ `3d9ee29`, `numerai` @ `7f47f05` (pins mlpipe `v0.2.0`)
 - Status: **findings only — nothing changed.** Priority is mlpipe cleanliness;
   reverse-direction notes are lower priority.
+- Since the audit (2026-10-26): resolved, D4 (ADR-0007 split, `3d9ee29`) and the A
+  stale-`live.parquet` bullet (work/0009: round-keyed `ingest_live`). Line numbers
+  below are as of `3d9ee29`; the raw-data default is now `../raw_data/numerai`
+  (`59dac43`). The A "shrink the example" fix is still open, and work/0009 grew the
+  example's real-data serving since.
 
 ## Verdict
 

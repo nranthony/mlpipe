@@ -261,7 +261,9 @@ procedure. Its zones are in TEMPLATE_OWNERSHIP.md. Rollout: work/0006 plan.
   `numerai_ticker`. Pull via numerapi. (Aug 2026: v5.2, all-int8, `era`.)
   Live (2026-10-23, checked host-side): `download_dataset(..., round_num=N)` serves a
   past round's `live.parquet` (round 1378, fetched during round 1383: one `date`,
-  `2026-10-15`), so a backfill can be rebuilt.
+  `2026-10-15`), so a backfill can be rebuilt. Rounds 1378 and 1384 (2026-10-26):
+  the live `date` is the day before the round's `openTime` (Sat ~12:00 UTC), well
+  inside `ingest_live`'s 7-day window.
 - W&B self-hosting is enterprise-only → not usable under the local-only constraint.
 - Neptune: acquired by OpenAI, public service winding down → off the table.
 - MLflow: open source, Linux Foundation; local SQLite + ./mlruns works fine; its MCP
