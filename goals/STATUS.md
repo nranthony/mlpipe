@@ -536,3 +536,8 @@ Log:
       bundle `1d3c948c`, unchanged.
   - Nothing promoted. A real serve run is still untried: it needs a promoted bundle
     and the Numerai API.
+- 2026-10-26 — Example `download_dir` default is now `../raw_data/numerai`, relative to
+  the cwd (the repo root, as for `store/` and `manifests/`), so a host checkout finds
+  the same folder without `--set`. It is in no signature. Rerun: ingest re-ran on its
+  own code edit (sig `3e8f2675`, same raw hashes); everything else was cached, bundle
+  `1d3c948c`.

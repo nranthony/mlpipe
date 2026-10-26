@@ -68,7 +68,7 @@ class IngestStep(Step):
     def run(self, ctx):
         cfg = IngestConfig.model_validate(ctx.config.get(self.name, {}))
         version, snapshot = cfg.version, cfg.snapshot
-        download_dir = Path(ctx.config.get("download_dir", "/workspace/raw_data/numerai"))
+        download_dir = Path(ctx.config.get("download_dir", "../raw_data/numerai"))
 
         outs = {}
         for key, fname in DATASETS.items():

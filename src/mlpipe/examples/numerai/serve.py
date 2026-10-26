@@ -76,7 +76,7 @@ class IngestLiveStep(Step):
 
     def run(self, ctx):
         cfg = IngestLiveConfig.model_validate(ctx.config.get(self.name, {}))
-        download_dir = Path(ctx.config.get("download_dir", "/workspace/raw_data/numerai"))
+        download_dir = Path(ctx.config.get("download_dir", "../raw_data/numerai"))
         final = download_dir / cfg.version / "live" / str(cfg.round) / "live.parquet"
         open_time = round_open_time(cfg.round)  # every run, never on a cache hit
 

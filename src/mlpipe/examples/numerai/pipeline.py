@@ -20,7 +20,9 @@ from mlpipe.steps.register import RegisterStep
 from mlpipe.steps.train import TrainStep
 
 DEFAULT_CONFIG = {
-    "download_dir": "/workspace/raw_data/numerai",  # shared profile-wide cache
+    # shared cache beside the checkout: relative to the cwd, which is the repo root
+    # (like store/ and manifests/). Not in any signature, so moving it busts nothing.
+    "download_dir": "../raw_data/numerai",
     # v6.0 (2026-10): v5.x training files are no longer served. The era column is
     # `date`, and `medium` = 350 Int8 + the String `feature_country`.
     # snapshot: the folder <version>/<snapshot>/ (the files' download date); a missing
