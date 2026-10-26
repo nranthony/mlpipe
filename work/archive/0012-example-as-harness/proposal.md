@@ -1,13 +1,14 @@
 # Proposal: Numerai example as a real-data harness — cheap separation fixes
 
-- Status: **Built 2026-10-26** (see goals/STATUS.md). Decision is in
-  [ADR-0009](../../docs/adr/0009-numerai-example-is-a-real-data-harness.md) (Accepted
+- Status: **Done 2026-10-26**; `uv lock` run host-side, `baselines.yaml` deleted
+  (approved). Built 2026-10-26 (see goals/STATUS.md). Decision is in
+  [ADR-0009](../../../docs/adr/0009-numerai-example-is-a-real-data-harness.md) (Accepted
   2026-10-26, task 2 option (a)).
   - Open before archiving: `uv lock` (human), and task 7's deletion (proposed).
   - Task 5 differed from the plan: `demo` has no train or register step, so the
     tests moved to a new builtin, `demo-tabular`.
   - Open question 2 was answered yes: cycles 5/7 got notes, not rewrites.
-- Author: Claude, from [work/0011](../0011-numerai-separation-audit/handoff.md)
+- Author: Claude, from [work/0011](../../0011-numerai-separation-audit/handoff.md)
   findings A, B (Low), C and D6
 
 ## Summary

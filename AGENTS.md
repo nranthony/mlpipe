@@ -24,7 +24,8 @@ current system. Work proceeds in cycles defined by `goals/cycleN_*.md`, one at a
   holds the founding decisions — changing one of those requires a new ADR)
 - Proposals & in-flight items that aren't a cycle → [work/](work/)
   (`NNNN-slug/`: proposal → spec → plan → notes; archive on completion)
-- Promoted baseline (written only by `mlpipe promote`, ADR-0006) → [baselines.yaml](baselines.yaml)
+- Promoted baseline (written only by `mlpipe promote`, ADR-0006) → `baselines.yaml`
+  (absent until the first promote)
 - Run data (gitignored, local): `store/` (shared CAS), `manifests/<pipeline>/`, `mlruns/`
 - Template extraction ownership zones → [TEMPLATE_OWNERSHIP.md](TEMPLATE_OWNERSHIP.md)
 - Repo procedures → `.claude/skills/` (currently none: `/next-cycle` was retired with

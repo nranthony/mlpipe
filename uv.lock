@@ -1804,7 +1804,6 @@ dependencies = [
 [package.optional-dependencies]
 data = [
     { name = "duckdb" },
-    { name = "numerapi" },
     { name = "pandera", extra = ["polars"] },
 ]
 dev = [
@@ -1816,6 +1815,9 @@ ml = [
     { name = "lightgbm" },
     { name = "optuna" },
     { name = "scikit-learn" },
+]
+numerai = [
+    { name = "numerapi" },
 ]
 template = [
     { name = "copier" },
@@ -1836,7 +1838,7 @@ requires-dist = [
     { name = "joblib" },
     { name = "lightgbm", marker = "extra == 'ml'" },
     { name = "mlflow", marker = "extra == 'track'", specifier = ">=3" },
-    { name = "numerapi", marker = "extra == 'data'" },
+    { name = "numerapi", marker = "extra == 'numerai'" },
     { name = "numpy" },
     { name = "optuna", marker = "extra == 'ml'" },
     { name = "pandera", extras = ["polars"], marker = "extra == 'data'" },
@@ -1850,7 +1852,7 @@ requires-dist = [
     { name = "torch", marker = "extra == 'torch'" },
     { name = "typer" },
 ]
-provides-extras = ["data", "ml", "track", "torch", "dev", "template"]
+provides-extras = ["data", "numerai", "ml", "track", "torch", "dev", "template"]
 
 [[package]]
 name = "mpmath"

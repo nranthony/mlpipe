@@ -18,9 +18,9 @@
   plan `8b92bc2c`, bundle `1d3c948c`, purge 12, `numerai_corr` scorer, `val_*` skipping
   12 boundary eras. OOF mean_corr 0.0305 (sharpe 1.92), val_mean_corr 0.0193 (sharpe
   1.11). The step-13 run (plan `8b0a1167`, purge 4, rank-Pearson) is not comparable.
-- Promoted: nothing valid. `baselines.yaml` is in the pre-ADR-0006 shape (no
-  `bundle_hash`), and the registry it referred to is gone. Only `mlpipe promote` may
-  rewrite it; `gc --dry-run` reports that it roots nothing. Smoke runs are never promoted.
+- Promoted: nothing. `baselines.yaml` is absent (the legacy pre-ADR-0006 block was
+  deleted 2026-10-26, human-approved); the first `mlpipe promote` creates it. Smoke runs
+  are never promoted.
 - Store: 44 artifacts, 5.45 GB, all kept today by the 30-day window alone.
 - Fixed 2026-10-24 (work/0009): the example's stale `live.parquet`. Serving now runs
   `ingest_live` → `validate_live` → `predict` with the round named in config
@@ -580,3 +580,9 @@ Log:
     log. A round-1384 predict was cached on all three steps, predictions `34ccf6f8`.
   - **Open:** `uv lock` (human), and deleting the legacy `baselines.yaml` block
     (whole file, proposed).
+  - **Closed the same day:**
+    - `uv lock` was run host-side; the only change is that numerapi moved to the
+      `numerai` extra.
+    - `baselines.yaml` was deleted (approved).
+    - The human approved deleting `manifests/numerai/` (gitignored run data).
+    - work/0012 archived.
