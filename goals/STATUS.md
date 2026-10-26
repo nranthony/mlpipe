@@ -24,7 +24,8 @@
 - Store: 44 artifacts, 5.45 GB, all kept today by the 30-day window alone.
 - Fixed 2026-10-24 (work/0009): the example's stale `live.parquet`. Serving now runs
   `ingest_live` → `validate_live` → `predict` with the round named in config
-  (`mlpipe predict --pipeline numerai --set ingest_live.round=N`), and leaves manifests.
+  (`mlpipe predict --pipeline numerai-example --set ingest_live.round=N`), and leaves
+  manifests.
 
 Log:
 - 2026-08-20: Bootstrap skeleton delivered to repo root. Cycle 0 attempted; blocked
@@ -555,3 +556,27 @@ Log:
   - In both rounds the live data is dated the day before the round opens, so the
     7-day window has slack. A wrong round's file would be off by a week or more, and
     the check would catch it.
+- 2026-10-26 — **ADR-0009 accepted; work/0012 built.** The Numerai example is a
+  real-data test harness, not a tournament pipeline.
+  - **Rename:** the pipeline is now `numerai-example`. The MLflow experiment is
+    `numerai-harness` and the Optuna study `harness-lgbm-medium`. `manifests/numerai/`
+    was copied to `manifests/numerai-example/`; the old folder is kept.
+  - **Extras:** `numerapi` moved from `data` to a new `numerai` extra. `uv.lock` is
+    stale until a human runs `uv lock`; the sandbox venv already has numerapi.
+  - **`demo-tabular`:** a new builtin pipeline (`steps/demo_tabular.py`), lifted from
+    the second-domain test. The cycle 9/10 CLI tests (register, promote, tune,
+    predict, lineage) now run on it instead of the Numerai harness. The Numerai
+    serve tests keep their toy helpers in `test_work0009_numerai.py`. A duplicate
+    ticker test was dropped (already covered there).
+  - **Wording:** Numerai/era wording removed from 9 generic modules.
+    - The example's docstring lists its divergences from the numerai repo.
+    - TEMPLATE_OWNERSHIP now lists `steps/**` and `plugins.py` as library code.
+    - Notes added to the cycle 1/5/7 goals, AGENTS.md, DESIGN.md §0/§7, and the
+      work/0003 command.
+  - **Measured:** 192 tests pass, ruff clean, core 707 lines (unchanged).
+  - **Real-data rerun:** `train` re-ran on a comment edit (sig `ccb430a6`) and
+    produced the same model `00d5befb`. `register` (sig `198903c4`) produced the same
+    bundle `1d3c948c`, plan `973fa231`. Everything else was cached from the copied
+    log. A round-1384 predict was cached on all three steps, predictions `34ccf6f8`.
+  - **Open:** `uv lock` (human), and deleting the legacy `baselines.yaml` block
+    (whole file, proposed).

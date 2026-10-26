@@ -1,5 +1,5 @@
 """Row-wise metrics for plain tabular tasks, as plain functions (DESIGN.md §4:
-trivial tier). The era-wise Numerai metrics live in eval_metrics."""
+trivial tier). Per-group domain metrics live with their pipeline."""
 
 from __future__ import annotations
 

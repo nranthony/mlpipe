@@ -1,4 +1,4 @@
-"""Group k-fold CV plan — the generic counterpart of cvplan's era-aware plan.
+"""Group k-fold CV plan — the unordered counterpart of cvplan's time-ordered plan.
 
 Rows sharing a group (a customer, a patient, a site) always land in the same
 fold, so no group straddles a train/valid split. With no group column every row

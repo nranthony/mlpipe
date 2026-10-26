@@ -5,7 +5,9 @@ template, if built, carries scaffolding only. See DESIGN.md §7.
 
 ## library  (ships in the `mlpipe` distribution; host repos never edit it)
 - src/mlpipe/core/**
-- src/mlpipe/cli.py
+- src/mlpipe/cli.py, src/mlpipe/plugins.py
+- src/mlpipe/steps/** (generic steps, including `predict` and the `demo`/`demo-tabular`
+  pipelines)
 - src/mlpipe/trackers/**, generic src/mlpipe/backends/**
 - tests for the above (tests/test_cycle0_spine.py, tests/test_core_boundary.py,
   tests/test_signature_scope.py)
@@ -16,7 +18,8 @@ template, if built, carries scaffolding only. See DESIGN.md §7.
 - .claude/settings.json
 
 ## skeleton  (template provides once at generation; repo owns thereafter)
-- the host package's steps/ and backends/ (here: examples/numerai/ once moved)
+- the host package's steps/ and backends/ (here: examples/numerai/, the
+  `numerai-example` harness, ADR-0009)
 - configs/**
 - goals/**, DESIGN.md (project sections)
 - work/README.md, docs/adr/0000-template.md

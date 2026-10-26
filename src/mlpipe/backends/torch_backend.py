@@ -67,7 +67,7 @@ class TorchMLPBackend:
         device = "cuda" if torch.cuda.is_available() else "cpu"
         model = self._build(X.width, p).to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=p["lr"])
-        # keep the CPU tensor in the source dtype (int8 for numerai features);
+        # keep the CPU tensor in the source dtype (e.g. int8 features);
         # cast per batch on the device so RAM never holds a float32 full matrix
         features = torch.from_numpy(np.ascontiguousarray(X.to_numpy()))
         target = torch.from_numpy(y.astype(np.float32)).unsqueeze(1)

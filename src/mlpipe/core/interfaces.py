@@ -33,7 +33,7 @@ class Artifact:
 @dataclass(frozen=True)
 class FoldPlan:
     """Grouped CV plan. An artifact in its own right — comparisons must cite the
-    same plan hash. Domain semantics (eras, purge, embargo) belong to the step
+    same plan hash. Domain semantics (time order, purge, embargo) belong to the step
     that builds the plan and travel in `meta`; consumers read only folds."""
 
     folds: list[tuple[np.ndarray, np.ndarray]]  # (train_idx, valid_idx)

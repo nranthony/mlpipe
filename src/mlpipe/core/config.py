@@ -51,7 +51,7 @@ class FloatSpace(StrictConfig):
 class TuneConfig(StrictConfig):
     study: str
     storage: str
-    metric: str  # a metric the `step` below logs, e.g. evaluate's mean_corr
+    metric: str  # a metric the `step` below logs, e.g. evaluate's val_r2
     direction: Literal["maximize", "minimize"] = "maximize"
     step: str = "evaluate"  # trials run up to this step and read its metrics
     n_trials: int = Field(default=5, gt=0)

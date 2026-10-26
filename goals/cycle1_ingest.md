@@ -7,3 +7,4 @@ load as polars with int8 feature dtypes intact.
 
 Since work/0009 (ADR-0007): live data left training ingest for the serve list
 (`ingest_live`, keyed by round), and ingest reads `<version>/<snapshot>/` (v6.0 now).
+Since ADR-0009 the pipeline is `numerai-example`, a real-data harness.

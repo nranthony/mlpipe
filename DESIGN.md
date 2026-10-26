@@ -9,8 +9,9 @@ they disagree, fix the text.
 A minimal, agent-legible MLOps pipeline for a personal repo. Mirrors the elegant core of
 SageMaker Pipelines / Vertex AI (typed steps, content-hash caching, lineage records)
 without the cloud plumbing. Everything local. A generic library that host repos install
-from a pinned git tag (ADR-0005); Numerai is its real-data example and test case
-(moving to `examples/numerai/`), not its purpose.
+from a pinned git tag (ADR-0005); Numerai is its real-data test harness
+(`examples/numerai/`, pipeline `numerai-example`, ADR-0009), not its purpose and not a
+tournament pipeline.
 
 ## 0. Decisions already made (do not relitigate without an ADR)
 
@@ -242,9 +243,11 @@ appear after the host package is (re)installed. Before the first tag:
   test-enforced;
 - the Numerai pipeline lives in `mlpipe.examples.numerai` (done; inside the wheel as a
   builtin pipeline rather than a separate package, decision 2026-10-21, so it runs
-  without a reinstall);
-- a second, non-Numerai smoke pipeline passes (done: `tests/test_work0006_second_domain.py`,
-  grouped customer data, regression and binary).
+  without a reinstall). It is registered as `numerai-example`, so a host's own
+  `numerai` pipeline name stays free (ADR-0009);
+- a second, non-Numerai pipeline passes (done: builtin `demo-tabular`,
+  `mlpipe.steps.demo_tabular`, grouped customer data, regression and binary). The CLI
+  tests for register, promote, tune, predict and lineage run on it.
 
 A Copier template, if built, carries **scaffolding only**: agent docs, ADR and `work/`
 conventions, a config skeleton and CLI wiring. It is built only after a host repo has

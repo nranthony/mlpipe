@@ -1,8 +1,9 @@
 # mlpipe
 
 A local, modular, agent-operated MLOps pipeline, shipped as a generic library that host
-repos pin to a git tag (ADR-0005). Numerai is the real-data example and test case, not
-the product; tournament work lives in the numerai repo. [DESIGN.md](DESIGN.md) is the design reference — read it first;
+repos pin to a git tag (ADR-0005). Numerai is the real-data test harness
+(`--pipeline numerai-example`, ADR-0009), not the product and not a tournament
+pipeline; tournament work lives in the numerai repo. [DESIGN.md](DESIGN.md) is the design reference — read it first;
 its §0 decisions stand until an ADR changes them, and its contracts describe the
 current system. Work proceeds in cycles defined by `goals/cycleN_*.md`, one at a time.
 

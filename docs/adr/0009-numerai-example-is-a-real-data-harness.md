@@ -1,6 +1,7 @@
 # ADR-0009: The Numerai example is a real-data test harness, not a tournament pipeline
 
-- Status: Proposed
+- Status: Accepted 2026-10-26 (nanthony), with work/0012 option (a): the pipeline is
+  renamed `numerai-example`.
 - Date: 2026-10-26
 - Deciders: nanthony + Claude (work/0012; weighs work/0011 finding A against ADR-0007
   decisions 4-7)

@@ -1,5 +1,5 @@
-"""Evaluate for plain tabular tasks — the generic counterpart of evaluate's
-era-wise scoring. Same slot (step name "evaluate", output `eval_report`), same
+"""Evaluate for plain tabular tasks — row-wise, where a domain pipeline's evaluate
+may score per group. Same slot (step name "evaluate", output `eval_report`), same
 two scores side by side: out-of-fold (`rmse`, `roc_auc`, ...) and the full-data
 model on the validation holdout (`val_rmse`, `val_roc_auc`, ...).
 """

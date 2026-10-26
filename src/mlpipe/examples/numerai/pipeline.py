@@ -1,7 +1,7 @@
-"""The real Numerai pipeline, plus its serve steps for `mlpipe predict`.
+"""The Numerai harness pipeline (ADR-0009), plus its serve steps for `mlpipe predict`.
 
-    mlpipe run --pipeline numerai
-    mlpipe predict --pipeline numerai --set ingest_live.round=N
+    mlpipe run --pipeline numerai-example
+    mlpipe predict --pipeline numerai-example --set ingest_live.round=N
 """
 
 from __future__ import annotations
@@ -71,9 +71,10 @@ DEFAULT_CONFIG = {
         "scorer": "mlpipe.examples.numerai.eval_metrics:numerai_corr_scores",
     },
     "register": {"model_name": "numerai-lgbm"},
-    "tracker": {"kind": "mlflow", "uri": "sqlite:///mlruns/mlflow.db", "experiment": "numerai"},
+    # harness state only (ADR-0009): no tournament decision is taken on these
+    "tracker": {"kind": "mlflow", "uri": "sqlite:///mlruns/mlflow.db", "experiment": "numerai-harness"},
     "tune": {
-        "study": "lgbm-medium",
+        "study": "harness-lgbm-medium",
         "storage": "sqlite:///mlruns/optuna.db",
         "metric": "mean_corr",
         "direction": "maximize",

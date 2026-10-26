@@ -50,7 +50,7 @@ tree count is the *marginal* cost. Narrowing features is the biggest single leve
 
 **1. Document the zero-code smoke run** (works today, ~2-3 min end to end, 3 fits):
 
-    mlpipe run --pipeline numerai \
+    mlpipe run --pipeline numerai-example \
       --set clean.cleaner.feature_set=small \
       --set cvplan.n_folds=2 \
       --set train.model.params.n_estimators=20 \

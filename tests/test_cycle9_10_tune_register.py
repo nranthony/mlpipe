@@ -1,9 +1,10 @@
 """Cycles 9 & 10 acceptance tests — tune (Optuna) and register/package,
-end-to-end on a toy snapshot through the real CLI."""
+end-to-end through the real CLI on the generic `demo-tabular` pipeline (ADR-0009:
+library behaviour is tested without the Numerai harness, whose serve path is in
+test_work0009_numerai.py)."""
 
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
 
@@ -16,62 +17,27 @@ from typer.testing import CliRunner
 from mlpipe.cli import app
 from mlpipe.core.manifest import ManifestLog
 from mlpipe.core.store import LocalCasStore
+from mlpipe.steps.demo_tabular import customers
 
 runner = CliRunner()
-
-
-SNAPSHOT = "2026-01-05"
-LIVE_ROUND = 1000
-
-
-def toy_snapshot(root):
-    raw = root / "raw" / "v0-toy" / SNAPSHOT
-    raw.mkdir(parents=True)
-    live_dir = root / "raw" / "v0-toy" / "live" / str(LIVE_ROUND)
-    live_dir.mkdir(parents=True)
-    rng = np.random.default_rng(5)
-    rows = 120
-    fa = rng.integers(0, 5, rows).astype(np.int8)
-    fb = rng.integers(0, 5, rows).astype(np.int8)
-    target = (0.25 * fa - 0.15 * fb + rng.normal(0, 0.2, rows)).astype(np.float32)
-    df = pl.DataFrame(
-        {
-            "era": [f"e{i // 15:03d}" for i in range(rows)],
-            "feature_fa": fa,
-            "feature_fb": fb,
-            "target": target,
-        }
-    )
-    for name in ("train.parquet", "validation.parquet"):
-        df.write_parquet(raw / name)
-    # a live file has one era: a single ISO date
-    df.with_columns(pl.lit("2026-01-02").alias("era")).write_parquet(live_dir / "live.parquet")
-    (raw / "features.json").write_text(
-        json.dumps({"feature_sets": {"all": ["feature_fa", "feature_fb"]}, "targets": ["target"]})
-    )
+PIPELINE = "demo-tabular"
 
 
 @pytest.fixture(scope="module")
 def env(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("e2e")
-    toy_snapshot(tmp)
     config = {
-        "download_dir": str(tmp / "raw"),
-        "ingest": {"version": "v0-toy", "snapshot": SNAPSHOT},
-        "ingest_live": {"version": "v0-toy", "era_column": "era"},
-        "validate": {"row_tolerance": 0.5},
-        "validate_live": {"era_column": "era"},
-        "clean": {"cleaner": {"kind": "baseline", "feature_set": "all"}},
+        "make": {"seed": 0, "customers": 40, "validation_customers": 20},
         "features": {"transformer": {"kind": "passthrough"}},
-        "cvplan": {"n_folds": 2, "purge_eras": 0, "embargo_eras": 0},
-        "train": {"model": {"kind": "lightgbm", "params": {"n_estimators": 5}}},
-        "evaluate": {"target": "target"},
-        "register": {"model_name": "toy-model"},
+        "cvplan": {"n_folds": 2, "group_column": "customer_id"},
+        "train": {"model": {"kind": "lightgbm", "params": {"n_estimators": 5}}, "target": "spend"},
+        "evaluate": {"task": "regression", "target": "spend"},
+        "register": {"model_name": "toy-model", "id_columns": ["customer_id"]},
         "tracker": {"kind": "mlflow", "uri": f"sqlite:///{tmp}/mlflow.db", "experiment": "toy"},
         "tune": {
             "study": "toy-study",
             "storage": f"sqlite:///{tmp}/optuna.db",
-            "metric": "mean_corr",
+            "metric": "r2",
             "n_trials": 2,
             "space": {"train.model.params.num_leaves": {"type": "int", "low": 4, "high": 16}},
         },
@@ -82,7 +48,7 @@ def env(tmp_path_factory):
         "--config", str(cfg_path),
         "--store-dir", str(tmp / "store"),
         "--manifests-dir", str(tmp / "manifests"),
-        "--pipeline", "numerai",
+        "--pipeline", PIPELINE,
     ]
     result = runner.invoke(app, ["run", *dirs])
     assert result.exit_code == 0, result.output
@@ -99,13 +65,13 @@ def promote(tmp, dirs, bundle):
         app, ["promote", bundle, *dirs, "--baselines", str(tmp / "baselines.yaml")]
     )
     assert result.exit_code == 0, result.output
-    return yaml.safe_load((tmp / "baselines.yaml").read_text())["numerai"]["champion"]
+    return yaml.safe_load((tmp / "baselines.yaml").read_text())[PIPELINE]["champion"]
 
 
 def test_cycle10_register_builds_bundle_without_registering(env):
     tmp, _, _ = env
     bundle = LocalCasStore(tmp / "store").load(bundle_hash_of(tmp))
-    assert bundle["features"] == ["feature_fa", "feature_fb"]
+    assert bundle["features"] == ["feature_x1", "feature_x2", "feature_noise"]
     assert bundle["plan_hash"] and bundle["model_name"] == "toy-model"
 
     import mlflow
@@ -120,9 +86,9 @@ def test_adr0006_promote_pins_baseline_and_moves_alias(env):
     full = bundle_hash_of(tmp)
     pinned = promote(tmp, dirs, full[:10])  # unique prefix resolves
     assert pinned["bundle_hash"] == full and pinned["alias"] == "champion"
-    assert pinned["plan_hash"] and {"mean_corr", "val_mean_corr"} <= set(pinned["metrics"])
+    assert pinned["plan_hash"] and {"r2", "val_r2"} <= set(pinned["metrics"])
     assert pinned["steps"]["train"]["config"]["model"]["params"]["n_estimators"] == 5
-    assert set(pinned["steps"]) >= {"ingest", "clean", "cvplan", "train", "register"}
+    assert set(pinned["steps"]) >= {"make", "cvplan", "train", "register"}
 
     import mlflow
 
@@ -145,36 +111,19 @@ def test_adr0006_promote_rejects_unknown_bundle(env):
 
 
 def test_cycle10_fresh_process_predicts_from_stored_state(env):
-    """A new process serves from the store, manifests and pin alone. `--input` skips
-    `ingest_live` (its round-open lookup needs the network); validate_live still runs."""
+    """A new process serves from the store, manifests and pin alone."""
     tmp, _, dirs = env
     promote(tmp, dirs, bundle_hash_of(tmp))
-    out = tmp / "preds.parquet"
-    live = tmp / "raw" / "v0-toy" / "live" / str(LIVE_ROUND) / "live.parquet"
+    src, out = tmp / "to_score.parquet", tmp / "preds.parquet"
+    customers(5, 2000, np.random.default_rng(3)).write_parquet(src)
     proc = subprocess.run(
-        [sys.executable, "-m", "mlpipe.cli", "predict", *dirs, "--input", str(live),
+        [sys.executable, "-m", "mlpipe.cli", "predict", *dirs, "--input", str(src),
          "--baselines", str(tmp / "baselines.yaml"), "--out", str(out)],
         capture_output=True, text=True, cwd="/workspace/mlpipe", check=False,
     )
     assert proc.returncode == 0, proc.stderr
     preds = pl.read_parquet(out)
-    assert preds.height == 120 and preds.columns == ["era", "prediction"]  # toy live: no ticker
-
-
-def test_work0006_predict_scores_an_explicit_input_keyed_by_ticker(env):
-    tmp, _, dirs = env
-    promote(tmp, dirs, bundle_hash_of(tmp))
-    live = pl.read_parquet(
-        tmp / "raw" / "v0-toy" / "live" / str(LIVE_ROUND) / "live.parquet"
-    ).head(7)
-    src = tmp / "to_score.parquet"
-    live.with_columns(pl.Series("numerai_ticker", [f"T{i}" for i in range(7)])).write_parquet(src)
-    out = tmp / "explicit.parquet"
-    result = runner.invoke(app, ["predict", *dirs, "--input", str(src),
-                                 "--baselines", str(tmp / "baselines.yaml"), "--out", str(out)])
-    assert result.exit_code == 0, result.output
-    preds = pl.read_parquet(out)
-    assert preds.columns == ["numerai_ticker", "era", "prediction"] and preds.height == 7
+    assert preds.height == 30 and preds.columns == ["customer_id", "prediction"]
 
 
 def test_cycle10_lineage_from_registered_bundle_reaches_raw_snapshot(env):
@@ -183,9 +132,9 @@ def test_cycle10_lineage_from_registered_bundle_reaches_raw_snapshot(env):
     reg = [m for m in log.entries() if m["step"] == "register"][-1]
     chain = log.lineage(reg["outputs"]["model_bundle"])
     steps = [m["step"] for m in chain]
-    assert steps[0] == "register" and "ingest" in steps
-    ingest = next(m for m in chain if m["step"] == "ingest")
-    assert "raw_train" in ingest["outputs"]  # raw snapshot hash reachable
+    assert steps[0] == "register" and "make" in steps
+    source = next(m for m in chain if m["step"] == "make")
+    assert "clean_table" in source["outputs"]  # the source snapshot hash is reachable
 
 
 def test_cycle9_tune_runs_resume_and_never_promotes(env):
@@ -214,7 +163,7 @@ def test_cycle9_tune_runs_resume_and_never_promotes(env):
 
 def test_work0006_lineage_resolves_a_prefix_and_rejects_unknown_hashes(env):
     tmp, _, _ = env
-    lineage_dirs = ["--manifests-dir", str(tmp / "manifests"), "--pipeline", "numerai"]
+    lineage_dirs = ["--manifests-dir", str(tmp / "manifests"), "--pipeline", PIPELINE]
     result = runner.invoke(app, ["lineage", bundle_hash_of(tmp)[:8], *lineage_dirs])
     assert result.exit_code == 0 and result.output.splitlines()[0].startswith("register")
     assert runner.invoke(app, ["lineage", "ffffffff", *lineage_dirs]).exit_code != 0

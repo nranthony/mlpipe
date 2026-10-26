@@ -83,7 +83,7 @@ class TrainStep(Step):
                 {"full": full, "fold_models": fold_backends, "backend_code": code},
                 "model", ext="joblib",
             ),
-            # the plan's group column (Numerai: era) travels with the OOF rows, if any
+            # the plan's group column travels with the OOF rows, if any
             "oof_preds": ctx.put(
                 pl.DataFrame([
                     *([df[plan.group_column]] if plan.group_column else []),

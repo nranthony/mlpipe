@@ -4,20 +4,15 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+import numpy as np
 import polars as pl
 import pytest
 import yaml
 from pydantic import ValidationError
-from test_cycle9_10_tune_register import (
-    LIVE_ROUND,
-    SNAPSHOT,
-    bundle_hash_of,
-    promote,
-    toy_snapshot,
-)
 from typer.testing import CliRunner
 
 from mlpipe.cli import app
@@ -30,9 +25,52 @@ from mlpipe.examples.numerai.serve import IngestLiveStep, ValidateLiveStep
 
 runner = CliRunner()
 OPEN = datetime(2026, 1, 12, 14, 0, tzinfo=UTC)
+PIPELINE = "numerai-example"
+SNAPSHOT = "2026-01-05"
+LIVE_ROUND = 1000
 
 
 # ------------------------------------------------------------------ helpers
+
+
+def toy_snapshot(root):
+    raw = root / "raw" / "v0-toy" / SNAPSHOT
+    raw.mkdir(parents=True)
+    live_dir = root / "raw" / "v0-toy" / "live" / str(LIVE_ROUND)
+    live_dir.mkdir(parents=True)
+    rng = np.random.default_rng(5)
+    rows = 120
+    fa = rng.integers(0, 5, rows).astype(np.int8)
+    fb = rng.integers(0, 5, rows).astype(np.int8)
+    target = (0.25 * fa - 0.15 * fb + rng.normal(0, 0.2, rows)).astype(np.float32)
+    df = pl.DataFrame(
+        {
+            "era": [f"e{i // 15:03d}" for i in range(rows)],
+            "feature_fa": fa,
+            "feature_fb": fb,
+            "target": target,
+        }
+    )
+    for name in ("train.parquet", "validation.parquet"):
+        df.write_parquet(raw / name)
+    # a live file has one era: a single ISO date
+    df.with_columns(pl.lit("2026-01-02").alias("era")).write_parquet(live_dir / "live.parquet")
+    (raw / "features.json").write_text(
+        json.dumps({"feature_sets": {"all": ["feature_fa", "feature_fb"]}, "targets": ["target"]})
+    )
+
+
+def bundle_hash_of(tmp) -> str:
+    log = ManifestLog(tmp / "manifests")
+    return [m for m in log.entries() if m["step"] == "register"][-1]["outputs"]["model_bundle"]
+
+
+def promote(tmp, dirs, bundle):
+    result = runner.invoke(
+        app, ["promote", bundle, *dirs, "--baselines", str(tmp / "baselines.yaml")]
+    )
+    assert result.exit_code == 0, result.output
+    return yaml.safe_load((tmp / "baselines.yaml").read_text())[PIPELINE]["champion"]
 
 
 def live_frame(dates, rows: int | None = None) -> pl.DataFrame:
@@ -296,7 +334,7 @@ def env(tmp_path_factory):
     cfg_path = tmp / "config.yaml"
     cfg_path.write_text(yaml.safe_dump(config))
     dirs = ["--config", str(cfg_path), "--store-dir", str(tmp / "store"),
-            "--manifests-dir", str(tmp / "manifests"), "--pipeline", "numerai"]
+            "--manifests-dir", str(tmp / "manifests"), "--pipeline", PIPELINE]
     result = runner.invoke(app, ["run", *dirs])
     assert result.exit_code == 0, result.output
     return tmp, dirs, flat

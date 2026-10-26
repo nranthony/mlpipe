@@ -26,8 +26,8 @@ class RegisterStep(Step):
     config_model = RegisterConfig
 
     def __init__(self, recipe: str | None = None) -> None:
-        # The key of a JSON artifact holding serving instructions (Numerai: the
-        # cleaner's fill and the source era column). It is a declared input, so
+        # The key of a JSON artifact holding serving instructions (e.g. a
+        # cleaner's fill and the source group column). It is a declared input, so
         # a recipe change moves this step's signature; reading another step's
         # config would leave register cached with a stale bundle.
         self.recipe = recipe

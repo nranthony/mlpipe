@@ -1,8 +1,9 @@
 """work/0006 step 12 — a second, non-Numerai domain through the shared steps.
 
-Synthetic customer data: several rows per customer, a regression target and a
-binary one. No eras anywhere. The pipeline reuses FeatureStep, TrainStep and
-RegisterStep unchanged, and swaps in the generic CV and evaluate steps.
+Synthetic customer data (`mlpipe.steps.demo_tabular`): several rows per customer,
+a regression target and a binary one. No eras anywhere. The pipeline reuses
+FeatureStep, TrainStep and RegisterStep unchanged, and swaps in the generic CV and
+evaluate steps.
 """
 
 from __future__ import annotations
@@ -13,49 +14,12 @@ import pytest
 from typer.testing import CliRunner
 
 from mlpipe.cli import app
-from mlpipe.core.interfaces import Step, StepResult
 from mlpipe.core.pipeline import Pipeline
 from mlpipe.core.store import LocalCasStore
-from mlpipe.steps.features import FeatureStep
-from mlpipe.steps.groupcv import GroupKFoldConfig, GroupKFoldStep, build_group_plan
-from mlpipe.steps.register import RegisterStep
-from mlpipe.steps.tabular_eval import TabularEvalStep
+from mlpipe.steps.demo_tabular import build_steps as steps
+from mlpipe.steps.demo_tabular import customers
+from mlpipe.steps.groupcv import GroupKFoldConfig, build_group_plan
 from mlpipe.steps.tabular_metrics import binary_metrics, regression_metrics
-from mlpipe.steps.train import TrainStep
-
-
-def customers(n_customers: int, offset: int, rng: np.random.Generator) -> pl.DataFrame:
-    rows = 6
-    ids = np.repeat(np.arange(offset, offset + n_customers), rows)
-    effect = np.repeat(rng.normal(scale=0.5, size=n_customers), rows)  # shared per customer
-    x1, x2, noise = (rng.normal(size=len(ids)) for _ in range(3))
-    signal = 1.5 * x1 - x2 + effect
-    return pl.DataFrame({
-        "customer_id": [f"c{i:04d}" for i in ids],
-        "feature_x1": x1,
-        "feature_x2": x2,
-        "feature_noise": noise,
-        "spend": signal + rng.normal(scale=0.3, size=len(ids)),
-        "churned": (signal + rng.logistic(scale=0.3, size=len(ids)) > 0).astype(np.float64),
-    })
-
-
-class MakeCustomers(Step):
-    name = "make"
-    inputs = []
-    outputs = ["clean_table", "clean_validation"]
-
-    def run(self, ctx):
-        rng = np.random.default_rng(ctx.config.get("make", {}).get("seed", 0))
-        return StepResult(outputs={
-            "clean_table": ctx.put(customers(120, 0, rng), "clean_table"),
-            "clean_validation": ctx.put(customers(40, 1000, rng), "clean_validation"),
-        })
-
-
-def steps():
-    return [MakeCustomers(), FeatureStep(), GroupKFoldStep(), TrainStep(), TabularEvalStep(),
-            RegisterStep()]
 
 
 def config(task: str) -> dict:
@@ -96,8 +60,8 @@ def test_work0006_second_domain_runs_end_to_end_and_caches(env, task):
 
 
 def test_work0006_default_prepare_carries_the_bundle_id_columns(env, tmp_path):
-    """`demo` has no prepare hook, so predict uses the default: bundle features
-    in, the register step's `id_columns` carried through to the output."""
+    """`demo` has no serve steps, so predict scores `--input` with the default
+    prepare: bundle features in, the register step's `id_columns` carried through."""
     store, manifests = env
     result = Pipeline(steps(), store, manifests, config("regression")).run()
     bundle = result["artifacts"]["model_bundle"].content_hash
