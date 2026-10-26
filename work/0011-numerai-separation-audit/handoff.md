@@ -10,7 +10,9 @@
   stale-`live.parquet` bullet (work/0009: round-keyed `ingest_live`). Line numbers
   below are as of `3d9ee29`; the raw-data default is now `../raw_data/numerai`
   (`59dac43`). The A "shrink the example" fix is still open, and work/0009 grew the
-  example's real-data serving since.
+  example's real-data serving since. Weighed in ADR-0009 (Proposed): keep the example
+  as a real-data harness until work/0006 step 14, then re-decide. The cheap fixes are
+  in work/0012.
 
 ## Verdict
 
