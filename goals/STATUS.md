@@ -7,8 +7,8 @@
   correctness; archived). Step 14 (numerai adoption, pinned to `v0.2.0`) is unblocked
   and driven from the numerai side (its work/0012 review). work/0010 (hygiene) built
   and archived. ADR-0007 / work/0009 (serve pipeline, inputs named in config) built
-  2026-10-24, real-data cache hit 2026-10-26, archived. A real serve run (`predict
-  --set ingest_live.round=N`) is still untried. ADR-0008 (optional step 15, Copier
+  2026-10-24, real-data cache hit 2026-10-26, archived. Real serve runs 2026-10-26
+  (rounds 1384 and 1378, bundle `1d3c948c`, not promoted) pass. ADR-0008 (optional step 15, Copier
   template) accepted; waits for step 14's first cache hit.
 - Data: Numerai **v6.0** (v5.x training files are no longer served). Raw files are in
   `/workspace/raw_data/numerai/v6.0` (downloaded host-side 2026-10-20). Since work/0009
@@ -541,3 +541,17 @@ Log:
   the same folder without `--set`. It is in no signature. Rerun: ingest re-ran on its
   own code edit (sig `3e8f2675`, same raw hashes); everything else was cached, bundle
   `1d3c948c`.
+- 2026-10-26 — **First real serve runs** (human opened egress to the Numerai API; run
+  in the sandbox with `--bundle 1d3c948c`, plan `8b92bc2c`; nothing promoted).
+  - Round 1384 (current): a 4.43 MB live file was downloaded to
+    `v6.0/live/1384/live.parquet`. Its `live_date` is 2026-10-23 and the round's
+    `open_time` 2026-10-24T12:12Z, so the check passes. Predictions `34ccf6f8`, 7148
+    rows.
+  - A rerun was cached for all three steps, with no download.
+  - `mlpipe lineage 34ccf6f8` reaches ingest through `validate_live`, `ingest_live`
+    and the bundle's training chain.
+  - Round 1378 (a backfill): `live_date` 2026-10-15, `open_time` 2026-10-16T12:00Z,
+    predictions `baa4d9f1`, 7155 rows.
+  - In both rounds the live data is dated the day before the round opens, so the
+    7-day window has slack. A wrong round's file would be off by a week or more, and
+    the check would catch it.
