@@ -106,6 +106,23 @@ snapshot any run wrote ("latest ever"), whatever its round or tag.
   v6.0. Decision 5 is safe either way; the answer only changes how often a new snapshot
   is worth taking.
 
+## Addendum 2026-10-27: an output hook on `PredictStep` (nanthony: "yes")
+
+The Titanic serve path (work/0013 follow-up) needed Kaggle's submission shape:
+`PassengerId, Survived` as 0/1, not a probability column. Decision 2's generic
+`predict` step gains a second optional hook beside `prepare`:
+
+- `finish(scored, bundle) -> pl.DataFrame` reshapes the scored frame (ids plus
+  `prediction`), for example by thresholding into a label column.
+- Its rules are those of `prepare`: it must be a plain module-level function, and its
+  module enters the step's signature (`code_deps`). It must return a polars frame with
+  one row per scored row, or the step fails.
+- Without it the output is unchanged. Domain shaping stays in the host's or example's
+  module (`examples/titanic/serve.py`), so `steps/predict.py` names no domain.
+
+`IngestFileStep` also takes a `name`, so a serve list's source step
+(`ingest_test`) has its own config subtree beside training's `ingest`.
+
 ## Alternatives considered
 
 - **sha256, size or mtime of the local file in the signature.** Rejected: nothing
