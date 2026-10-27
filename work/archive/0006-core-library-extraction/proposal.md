@@ -2,10 +2,12 @@
 
 - Status: Accepted → ADR-0004, ADR-0005, ADR-0006 (2026-10-19). Answers: no new
   repo; this repo *is* the library, with Numerai moved to `examples/`. Execution:
-  [plan.md](plan.md)
+  [plan.md](plan.md). Archived 2026-10-27: every step done, shipped in `v0.3.0`.
+  `host-repo-handoff.md` here is the pre-release draft; its successor is
+  [docs/adopting.md](../../../docs/adopting.md).
 - Author: Claude (agent, windows-ai-sandbox)
 - Date: 2026-10-19
-- Related: [work/0004](../archive/0004-consistency-review-and-orchestrator-question/proposal.md)
+- Related: [work/0004](../0004-consistency-review-and-orchestrator-question/proposal.md)
   (findings A–C are prerequisites here), DESIGN.md §7 (the extraction plan this would
   amend), numerai repo `work/0010-mlpipe-spine-adoption/spec.md` (the consumer side)
 

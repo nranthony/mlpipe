@@ -1,7 +1,7 @@
 # Proposal: generic MLOps template & library hardening (cross-domain readiness assessment)
 
 - Status: Reviewed 2026-10-20 — findings verified against the code and folded into the
-  [work/0006 plan](../../0006-core-library-extraction/plan.md); see "Disposition" at the end.
+  [work/0006 plan](../0006-core-library-extraction/plan.md); see "Disposition" at the end.
   This file stays as the independent-review record; execution is tracked in the 0006 plan only.
 - Archived 2026-10-27: every finding landed in work/0006 — M1 step 11
   (`core/signature.py` `_first_party`), M2 step 16 (`mlpipe gc --dry-run`), M3/M4/M5/A1
@@ -10,8 +10,8 @@
 - Author: Antigravity (agent, pair programming with nanthony)
 - Date: 2026-10-20
 - Related: [work/0004](../0004-consistency-review-and-orchestrator-question/proposal.md) (consistency review),
-  [work/0006](../../0006-core-library-extraction/proposal.md) (library extraction),
-  [work/0006 plan](../../0006-core-library-extraction/plan.md),
+  [work/0006](../0006-core-library-extraction/proposal.md) (library extraction),
+  [work/0006 plan](../0006-core-library-extraction/plan.md),
   [DESIGN.md](../../../DESIGN.md) §1, §3, §7,
   [ADR-0004](../../../docs/adr/0004-core-size-structural-rules.md),
   [ADR-0005](../../../docs/adr/0005-generic-library-numerai-as-example.md),
@@ -338,7 +338,7 @@ directly into the remaining steps of **work/0006**:
 ## Disposition (2026-10-20, Claude Code cross-check)
 
 Each finding was checked against the code at `8b8842a`. "Lands in" refers to the
-[work/0006 plan](../../0006-core-library-extraction/plan.md) step that now owns it.
+[work/0006 plan](../0006-core-library-extraction/plan.md) step that now owns it.
 
 | Finding | Verdict | Lands in | Notes |
 |---|---|---|---|

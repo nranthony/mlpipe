@@ -2,8 +2,8 @@
 
 **Current state (update in place; the log below is append-only):**
 - Build cycles 0–10: code complete since 2026-08-20.
-- Active work: work/0006 plan ([plan.md](../work/0006-core-library-extraction/plan.md)).
-  Steps 1–14 and 16 done. `v0.2.0` tagged (work/0008, cache and provenance
+- work/0006 (library extraction, [plan](../work/archive/0006-core-library-extraction/plan.md))
+  is complete and archived; it shipped in `v0.3.0`. `v0.2.0` tagged (work/0008, cache and provenance
   correctness; archived). Step 14 (numerai adoption, pinned to `v0.2.0`) done
   2026-10-23 on the numerai side, confirmed here 2026-10-27. work/0010 (hygiene) built
   and archived. ADR-0007 / work/0009 (serve pipeline, inputs named in config) built
@@ -13,8 +13,9 @@
   viewing surfaces, ADR-0010) built 2026-10-26; MLflow run grouping and the Kaggle
   test.csv serve path added 2026-10-27; it archives once the human has looked at the
   MLflow UI and the first report.
-- Release: `v0.3.0` prepared (`190e882`, version bumped). Waiting on host-side
-  `uv lock`, tag and push, then numerai's pin bump.
+- Release: `v0.3.0` tagged and pushed (2026-10-27). numerai pins it (`bf4a4c7` there,
+  121 tests pass). A host adopting mlpipe into existing code starts from
+  [docs/adopting.md](../docs/adopting.md).
 - Due next: the ADR-0009 re-decision (shrink the Numerai example; its trigger, step
   14, fired) and work/0011's "one spec" (feature selection, cvplan relocation).
 - numerai-example's next full run retrains once (~30 min): the work/0013 train
@@ -762,3 +763,16 @@ Log:
     clean.
   - **Measured:** 219 tests pass. work/0006 is complete, all steps done; it archives
     with the release.
+- 2026-10-27 — **v0.3.0 released; work/0006 archived; adoption brief.**
+  - **Release:** the human ran `uv lock` (`6c2fdcd`), tagged `v0.3.0` and pushed.
+  - **numerai:** bumped its `[tool.uv.sources]` pin from `v0.2.0` to `v0.3.0`
+    (`bf4a4c7` there); 121 tests pass. No API it uses changed since `v0.2.0`. The
+    signature fix returns the same `None` as before without the import, so its cached
+    `prep` should stay a hit. The real-data check (`prep` cached at `410367210bbb`) is
+    still to run.
+  - **`docs/adopting.md`:** a one-page brief for an agent adopting mlpipe into a repo
+    with existing code. It covers applying the template, the first stage, what must
+    reach a signature (raw-file sha256, seeds, library versions, `code_roots`), CLI or
+    in-process, the cache-hit and lineage proof, and the adoption ADR. It distils
+    numerai's ADR-0008 and supersedes work/0006's pre-release `host-repo-handoff.md`.
+  - **Archived:** work/0006 moved to `work/archive/`, with its links fixed.
