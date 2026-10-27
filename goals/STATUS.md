@@ -710,3 +710,29 @@ Log:
 
     That docstring edit moves the example's clean signature. The pending full
     retrain absorbs it.
+- 2026-10-27 — **work/0013 follow-up: Titanic serve path** (built by a subagent in a
+  worktree, merged in `8df2bfd`).
+  - **What runs:** `mlpipe predict --pipeline titanic-example` does `ingest_test`
+    (test.csv, sha256-pinned) → `predict`. `examples/titanic/serve.py` reuses clean's
+    `features` (the label is optional) and turns P(Survived) > 0.5 into
+    `PassengerId, Survived` (Int64, 0/1).
+  - **Generic additions:**
+    - a `PredictStep(finish=...)` output hook: module-level only, in `code_deps`,
+      row count checked;
+    - `IngestFileStep(name=...)`.
+  - **Real run** on bundle 5ce94ca3 (plan 9bb6921d): 418 rows, positive rate 0.376,
+    predictions `be146739`. Lineage reaches the training run, and a rerun is all
+    cached. The output is parquet; Kaggle wants CSV, one polars line away.
+  - **Training rerun after the merge:** `ingest` and `clean` re-ran (their code moved)
+    with byte-identical outputs, and profile through register stayed cached.
+  - **Measured:** 216 tests pass, ruff clean.
+- 2026-10-27 — **v0.3.0 prepared:** `pyproject.toml` version is 0.3.0. It takes 26
+  commits since `v0.2.0`:
+  - work/0010's streaming `save`;
+  - ADR-0010 (curves, `CurveBackend`, charts, MLflow artifacts, run grouping,
+    `mlpipe show`, reports);
+  - the Titanic example and serve path;
+  - the two numerai follow-ups.
+
+  Host steps: `uv lock`, commit, `git tag v0.3.0`, push. Then numerai bumps its pin
+  (`uv add "mlpipe @ git+https://github.com/nranthony/mlpipe.git@v0.3.0"`).
