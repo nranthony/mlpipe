@@ -1,7 +1,9 @@
 # Ownership map (library + future scaffolding template)
 
-Revised by ADR-0005: the engine is a **library** that host repos install. A Copier
-template, if built, carries scaffolding only. See DESIGN.md §7.
+Revised by ADR-0005: the engine is a **library** that host repos install. The Copier
+template (ADR-0008, `copier.yml` + `template/`, built 2026-10-27) carries scaffolding
+only. See DESIGN.md §7. The zones below name this repo's files; a rendered host's
+zones are listed in its `/template-sync` skill (`template/.claude/skills/template-sync/`).
 
 ## library  (ships in the `mlpipe` distribution; host repos never edit it)
 - src/mlpipe/core/**
@@ -12,6 +14,8 @@ template, if built, carries scaffolding only. See DESIGN.md §7.
 - src/mlpipe/trackers/**, generic src/mlpipe/backends/**
 - tests for the above (tests/test_cycle0_spine.py, tests/test_core_boundary.py,
   tests/test_signature_scope.py)
+- copier.yml, template/** (the host scaffolding; versioned by this repo's tags),
+  tests/test_template.py
 
 ## template-owned  (future scaffolding template; updates flow in, repos should not edit)
 - the managed sections of AGENTS.md; CLAUDE.md (thin @AGENTS.md stub)

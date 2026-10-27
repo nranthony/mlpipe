@@ -1,0 +1,39 @@
+[project]
+name = "{{ project_name }}"
+version = "0.1.0"
+description = "{{ description }}"
+requires-python = ">=3.11"
+dependencies = [
+  # extras as needed: mlpipe[ml] (lightgbm, sklearn, optuna), mlpipe[track] (mlflow,
+  # plotly), mlpipe[data] (pandera, duckdb), mlpipe[torch]
+  "mlpipe",
+]
+
+[dependency-groups]
+dev = ["pytest", "ruff"]
+
+# mlpipe discovers this repo's pipeline here; it appears after `uv sync`.
+[project.entry-points."mlpipe.pipelines"]
+{{ pipeline_name }} = "{{ package_name }}.pipeline"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/{{ package_name }}"]
+
+[tool.uv.sources]
+# The pin is the template's tag: `copier update` moves it, then `uv lock
+# --upgrade-package mlpipe` (the /template-sync skill). Never a path source: an
+# editable checkout would make manifests' recorded mlpipe version meaningless.
+mlpipe = { git = "https://github.com/nranthony/mlpipe.git", tag = "{{ _commit }}" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff.lint]
+ignore = [
+  "B008",   # typer.Option in defaults is the idiomatic typer CLI pattern
+  "RUF012", # a Step declares inputs/outputs as plain class-level lists by design
+]

@@ -1,0 +1,68 @@
+# {{ project_name }}
+
+{{ description }}. Built on [mlpipe](https://github.com/nranthony/mlpipe), a local,
+agent-operated MLOps library pinned to a git tag in `pyproject.toml`. mlpipe gives this
+repo a content-addressed store, signature-cached steps, one manifest per step
+execution, lineage, MLflow views and the `mlpipe` CLI. This repo holds the domain:
+its steps, configs and decisions. [DESIGN.md](DESIGN.md) is the design reference.
+
+<!-- mlpipe-template: managed below. `copier update` (/template-sync) owns this
+section; put project rules in the project section at the end. -->
+
+## Start here (session ritual)
+
+1. Read [DESIGN.md](DESIGN.md) if not already in context.
+2. Check [goals/STATUS.md](goals/STATUS.md) for the current state and the log.
+3. Check [work/](work/) for in-flight items and [docs/adr/](docs/adr/) for decisions
+   constraining the area you're touching.
+4. Compare `_commit` in `.copier-answers.yml` (the mlpipe tag this repo was rendered
+   from and pins) with mlpipe's latest tag. If behind, propose `/template-sync` before
+   new work.
+
+## Where things live
+
+- Design and boundaries → [DESIGN.md](DESIGN.md)
+- Status and change log → [goals/STATUS.md](goals/STATUS.md) (the log is append-only)
+- Why decisions were made → [docs/adr/](docs/adr/) (numbered, append-only; a changed
+  decision is a new ADR that supersedes the old)
+- Proposals and in-flight items → [work/](work/) (`NNNN-slug/`; archive, never delete)
+- Pipelines → `src/{{ package_name }}/`, registered under `[project.entry-points."mlpipe.pipelines"]`
+- Run data (gitignored, local): `store/`, `manifests/<pipeline>/`, `mlruns/`, `reports/`
+- Repo procedures → `.claude/skills/`: `template-sync` (take a new mlpipe tag)
+
+## Hard rules
+
+- Steps touch the world ONLY through `RunContext` (`ctx.get`, `ctx.put`, `ctx.config`,
+  `ctx.log_metric`, `ctx.log_meta`). No direct file I/O, no tracker SDK calls in steps.
+- Polars DataFrames cross step boundaries; Parquet at rest. Pandas only inside a step,
+  where a library requires it.
+- Every step config is a `StrictConfig` (pydantic, extra keys forbidden). A new option
+  goes into the schema first; never bypass validation.
+- Every run goes through the CLI (`mlpipe run` / `tune` / `predict` / `promote` /
+  `lineage` / `show`), never by importing internals, so every execution leaves a
+  manifest.
+- Step modules import what they use from submodules (`from {{ package_name }}.helpers import f`),
+  not from the package root: a step's signature covers the code it imports, so a heavy
+  or unrelated package root would invalidate its cache on unrelated edits.
+- Promotion only via `mlpipe promote`; `baselines.yaml` is written by nothing else.
+- mlpipe is a pinned library. Never patch it here: a fix goes to mlpipe, ships as a
+  tag, and this repo bumps the pin (`/template-sync`).
+- New dependencies need a short ADR (status: Proposed). No hosted or cloud storage of
+  run data. Never commit secrets.
+
+## When comparing experiments
+
+Cite the fold-plan hash for both runs. If the plan hashes differ, the comparison is
+invalid: say so instead of reporting a winner.
+
+## When blocked
+
+Environment blocks (installs, credentials, network) are human steps: stop and ask, and
+record the exact ask in a `work/` item so it survives the session.
+
+<!-- mlpipe-template: end of managed section -->
+
+## Project
+
+<!-- Project-specific rules, data facts and conventions go here. Template updates
+leave this section alone. -->

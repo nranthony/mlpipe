@@ -28,7 +28,9 @@ current system. Work proceeds in cycles defined by `goals/cycleN_*.md`, one at a
   (absent until the first promote)
 - Run data (gitignored, local): `store/` (shared CAS), `manifests/<pipeline>/`, `mlruns/`,
   and agent reports in `reports/<pipeline>/` (ADR-0010)
-- Template extraction ownership zones → [TEMPLATE_OWNERSHIP.md](TEMPLATE_OWNERSHIP.md)
+- Template extraction ownership zones → [TEMPLATE_OWNERSHIP.md](TEMPLATE_OWNERSHIP.md);
+  the Copier template for host repos → `copier.yml` + `template/` (ADR-0008; a change
+  there ships with the next tag, and `tests/test_template.py` renders it)
 - Repo procedures → `.claude/skills/`: `report` (an agent report from stored artifacts,
   ADR-0010). Shared procedures (`/myconv:make-plan`, `/myconv:wrap-up`, …) arrive via
   the myconv plugin, never copied into this repo

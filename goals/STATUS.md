@@ -8,8 +8,8 @@
   2026-10-23 on the numerai side, confirmed here 2026-10-27. work/0010 (hygiene) built
   and archived. ADR-0007 / work/0009 (serve pipeline, inputs named in config) built
   2026-10-24, real-data cache hit 2026-10-26, archived. Real serve runs 2026-10-26
-  (rounds 1384 and 1378, bundle `1d3c948c`, not promoted) pass. ADR-0008 (optional step 15, Copier
-  template) accepted; unblocked now that step 14 is done. work/0013 (Titanic example,
+  (rounds 1384 and 1378, bundle `1d3c948c`, not promoted) pass. ADR-0008 (step 15, Copier
+  template) built 2026-10-27 (`copier.yml` + `template/`); work/0006 is complete. work/0013 (Titanic example,
   viewing surfaces, ADR-0010) built 2026-10-26; MLflow run grouping and the Kaggle
   test.csv serve path added 2026-10-27; it archives once the human has looked at the
   MLflow UI and the first report.
@@ -743,3 +743,22 @@ Log:
 
   Host steps: `uv lock`, commit, `git tag v0.3.0`, push. Then numerai bumps its pin
   (`uv add "mlpipe @ git+https://github.com/nranthony/mlpipe.git@v0.3.0"`).
+- 2026-10-27 — **work/0006 step 15: the Copier template (ADR-0008), in v0.3.0.**
+  nanthony kept it to apply to a second repo outside this profile.
+  - **Files:** `copier.yml` (four questions: project, package, pipeline and
+    description; no tasks, migrations or extensions) and `template/`.
+  - **What it renders:**
+    - `AGENTS.md` with a managed section (session ritual, hard rules for a host,
+      including "import from submodules", learned from numerai's closure test), the
+      `CLAUDE.md` stub and a `template-sync` skill;
+    - `pyproject.toml`, which pins mlpipe to the template's tag (`_commit`), so
+      `copier update` moves the pin, and registers the entry point;
+    - one sample `StrictConfig` step;
+    - `tests/test_smoke.py` (CLI run, then all cached);
+    - the DESIGN, STATUS, ADR-template, `work/README.md` and `.gitignore` skeletons.
+  - **Test:** `tests/test_template.py` builds a throwaway git repo holding only the
+    template, tags it, renders it, checks the layout and that pin and `_commit` match,
+    and runs the rendered smoke test against this checkout. The rendered code is ruff
+    clean.
+  - **Measured:** 219 tests pass. work/0006 is complete, all steps done; it archives
+    with the release.

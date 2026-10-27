@@ -1,0 +1,29 @@
+# {{ project_name }} — design
+
+What this repo builds on mlpipe, and the decisions that stand until an ADR changes
+them. Keep it current: an agent reads it first.
+
+## 1. Purpose
+
+{{ description }}. <!-- the question this pipeline answers, for whom, how it is used -->
+
+## 2. Data
+
+<!-- sources, where raw files live (outside the repo), how a snapshot is named and
+pinned (a sha256 in config, a date or round in the path), size, refresh cadence -->
+
+## 3. Pipeline
+
+`{{ pipeline_name }}` (`src/{{ package_name }}/pipeline.py`):
+
+| Step | Inputs | Outputs | Notes |
+|---|---|---|---|
+| `make_table` | — | `table` | sample step; replace |
+
+## 4. Evaluation
+
+<!-- the metric that decides, the CV scheme and its fold-plan hash, the holdout -->
+
+## 5. Decisions
+
+<!-- one line each, linking docs/adr/ -->

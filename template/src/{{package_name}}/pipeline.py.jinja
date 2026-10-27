@@ -1,0 +1,45 @@
+"""The {{ pipeline_name }} pipeline, registered in pyproject.toml.
+
+    uv run mlpipe run --pipeline {{ pipeline_name }}
+
+A sample step to replace. mlpipe's generic steps (`mlpipe.steps`: ingest_file,
+features, groupcv, train, tabular_eval, register, predict, profile) compose with
+your own; see mlpipe's examples/titanic for a full chain.
+"""
+
+from __future__ import annotations
+
+import polars as pl
+from mlpipe.core.config import StrictConfig
+from mlpipe.core.interfaces import Step, StepResult
+
+DEFAULT_CONFIG = {
+    "make_table": {"rows": 100, "seed": 1},
+}
+
+
+class MakeTableConfig(StrictConfig):  # extra keys forbidden: a typo fails the run
+    rows: int = 100
+    seed: int = 1
+
+
+class MakeTable(Step):
+    """Steps touch the world only through `ctx`: config, inputs, outputs, metrics."""
+
+    name = "make_table"
+    inputs: list[str] = []
+    outputs = ["table"]
+    config_model = MakeTableConfig
+
+    def run(self, ctx):
+        cfg = MakeTableConfig.model_validate(ctx.config.get(self.name, {}))
+        df = pl.DataFrame({
+            "id": pl.int_range(cfg.rows, eager=True),
+            "feature_x": pl.Series([(i * cfg.seed) % 97 for i in range(cfg.rows)], dtype=pl.Float64),
+        })
+        ctx.log_metric("mean_x", float(df["feature_x"].mean()))
+        return StepResult(outputs={"table": ctx.put(df, "table")})
+
+
+def build_steps() -> list[Step]:
+    return [MakeTable()]

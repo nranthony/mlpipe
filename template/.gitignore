@@ -1,0 +1,25 @@
+__pycache__/
+*.py[cod]
+.venv/
+.venv-*/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# mlpipe run data (local, never committed)
+data/
+store/
+manifests/
+mlruns/
+reports/
+
+# agent conventions
+AGENTS.local.md
+**/AGENTS.local.md
+.claude/settings.local.json
+work/plans/
+*.rej
+*.orig
+.env

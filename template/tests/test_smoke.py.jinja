@@ -1,0 +1,21 @@
+"""The pipeline runs through the CLI, and a second run is served from cache."""
+
+from mlpipe.cli import app
+from typer.testing import CliRunner
+
+from {{ package_name }}.pipeline import build_steps
+
+
+def test_smoke_run_then_cache_hit(tmp_path):
+    args = ["run", "--pipeline", "{{ pipeline_name }}",
+            "--store-dir", str(tmp_path / "store"),
+            "--manifests-dir", str(tmp_path / "manifests")]
+    first = CliRunner().invoke(app, args)
+    assert first.exit_code == 0, first.output
+    second = CliRunner().invoke(app, args)
+    assert second.exit_code == 0, second.output
+
+    # `mlpipe run` prints one status line per step
+    n = len(build_steps())
+    assert first.output.count(" success ") == n, first.output
+    assert second.output.count(" cached ") == n, second.output

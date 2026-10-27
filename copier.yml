@@ -1,0 +1,46 @@
+# Copier template for a host repo built on mlpipe (ADR-0008). A template version is an
+# mlpipe git tag; the rendered pyproject pins mlpipe to that same tag (`_commit`).
+#
+#   copier copy gh:nranthony/mlpipe <dest>            # latest tag
+#   copier update --vcs-ref <tag>                      # from the host repo, /template-sync
+#
+# Rendering never runs code: no _tasks, _migrations or _jinja_extensions, so no
+# --trust is ever needed (tests/test_template.py enforces it).
+
+_min_copier_version: "9.18"
+_subdirectory: template
+_answers_file: .copier-answers.yml
+_templates_suffix: .jinja
+
+project_name:
+  type: str
+  help: Distribution name ([project].name), lowercase with dashes, e.g. churn-model
+  validator: >-
+    {% if not project_name or project_name != project_name | lower or " " in project_name %}
+    lowercase, no spaces
+    {% endif %}
+
+package_name:
+  type: str
+  help: Python package under src/
+  default: "{{ project_name | replace('-', '_') }}"
+  validator: >-
+    {% if not package_name.isidentifier() %}must be a valid Python identifier{% endif %}
+
+pipeline_name:
+  type: str
+  help: Name the pipeline registers under (`mlpipe run --pipeline <name>`)
+  default: "{{ project_name }}"
+
+description:
+  type: str
+  help: One line for pyproject and AGENTS.md
+  default: "A local ML pipeline built on mlpipe"
+
+_message_after_copy: |
+  Rendered {{ project_name }} against mlpipe {{ _commit }}. Next, host-side:
+    cd {{ _copier_conf.dst_path }}
+    git init   # if new
+    uv lock && uv sync
+    uv run pytest          # the smoke test: a run, then a cache hit
+    uv run mlpipe run --pipeline {{ pipeline_name }}

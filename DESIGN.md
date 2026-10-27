@@ -275,10 +275,18 @@ appear after the host package is (re)installed. Before the first tag:
   `test.csv` into a submission-shaped `PassengerId, Survived` frame, the generic
   serve contract on a second domain.
 
-A Copier template, if built, carries **scaffolding only**: agent docs, ADR and `work/`
-conventions, a config skeleton and CLI wiring. It is built only after a host repo has
-adopted the library, and synced via `copier update` driven by a `/template-sync`
-procedure. Its zones are in TEMPLATE_OWNERSHIP.md. Rollout: work/0006 plan.
+The Copier template (ADR-0008; `copier.yml` + `template/`) carries **scaffolding
+only**. It renders:
+- agent docs: an `AGENTS.md` with a managed section, the `CLAUDE.md` stub and a
+  `/template-sync` skill;
+- the ADR and `work/` conventions, `DESIGN.md` and `goals/STATUS.md` skeletons;
+- a `pyproject.toml` that pins mlpipe to the template's own tag and registers the
+  pipeline entry point;
+- one sample `StrictConfig` step, and a CLI smoke test that checks a cache hit.
+
+Rendering runs no code. A host takes a new tag with `copier update` (the
+`/template-sync` skill), which follows its zones. `tests/test_template.py` renders a
+tagged copy and runs the rendered smoke test.
 
 ## 8. Known landscape facts (as of Aug 2026, verified)
 
