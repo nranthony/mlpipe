@@ -674,3 +674,18 @@ Log:
     No signature changes: a titanic-example rerun was 8/8 cached.
   - **Measured:** 212 tests pass, ruff clean.
   - **Core size:** orchestration 746 → 757 lines, the minimum for the two fixes.
+- 2026-10-27 — **work/ triage.**
+  - **Archived:**
+    - 0002: its gaps went to work/0006 steps 3–4 and ADR-0006;
+    - 0003: `era_slice` landed as step 2 (the `configs/smoke.yaml` preset was not
+      built);
+    - 0004: findings A–G landed as steps 1–7b;
+    - 0007: every finding went to 0006 (the template stays as step 15).
+  - **Refreshed 0005.** Still open: the CVE scan and the depaudit re-run (host steps),
+    plus two choices for nanthony: the form of `exclude-newer`, and full `mlflow` vs
+    `mlflow-skinny`.
+  - **Refreshed 0011.** Still open:
+    - the "one spec": feature selection by the `feature_` prefix, `cvplan` in generic
+      `steps/`, and fixed slot and column names;
+    - the Numerai text in DESIGN §2/§8;
+    - ADR-0009's re-decision on shrinking the example, now due since step 14 is done.

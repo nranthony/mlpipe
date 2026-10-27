@@ -1,7 +1,13 @@
 # Proposal: post-build consistency review, and whether to replace the custom core
 
-- Status: Draft — assessment delivered 2026-08-27; awaiting nanthony's answers to
-  "Open questions" before any of the "Next steps" starts
+- Status: Done — open questions answered 2026-10-19 (work/0006 plan header): Q1
+  library first (ADR-0005), Q2 no external servers, Q3 structural rules (ADR-0004), Q4
+  explicit `promote` (ADR-0006), Q5 holdout scored, Q6 twin deleted by the human
+  2026-10-21 and the "ADR-0004" citation fixed under ADR-0003. Custom core kept.
+- Archived 2026-10-27: A → work/0006 step 4 (`cli.py` `promote`); B → step 5
+  (`core/config.py` `PipelineConfig`, seed dropped); C → step 3; D → step 1 / ADR-0004;
+  E → step 10 (declared `RunContext` surface in `core/interfaces.py`); F → step 6
+  (`val_*` metrics); G → step 7 (`manifests/<pipeline>/`) and 7b (`git_dirty`).
 - Author: Claude (agent, windows-ai-sandbox)
 - Date: 2026-08-27
 - Related: [work/0002](../0002-post-build-followups/proposal.md) (gaps 2, 3 still open;

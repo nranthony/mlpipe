@@ -1,6 +1,10 @@
 # Proposal: subset ("smoke") pipeline runs on real data
 
-- Status: Draft — not started; capability work, not a build-defect fix
+- Status: Done — built as work/0006 step 2 (2026-10-20), proven on v6.0 at step 8.
+- Archived 2026-10-27: `era_slice` → `examples/numerai/clean.py` (`CleanConfig.era_slice`,
+  tests in `tests/test_work0006_phase1.py`); `--tag smoke` convention → work/0006 step 2;
+  the `configs/smoke.yaml` preset was not pursued (`configs/` does not exist; optional,
+  revisit with the ADR-0008 template); `raw_live` left whole as proposed.
 - Author: Claude (agent, windows-ai-sandbox)
 - Date: 2026-08-24
 - Related: [work/0002](../0002-post-build-followups/proposal.md) — separate item, but see

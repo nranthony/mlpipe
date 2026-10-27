@@ -3,6 +3,10 @@
 - Status: Reviewed 2026-10-20 — findings verified against the code and folded into the
   [work/0006 plan](../0006-core-library-extraction/plan.md); see "Disposition" at the end.
   This file stays as the independent-review record; execution is tracked in the 0006 plan only.
+- Archived 2026-10-27: every finding landed in work/0006 — M1 step 11
+  (`core/signature.py` `_first_party`), M2 step 16 (`mlpipe gc --dry-run`), M3/M4/M5/A1
+  step 7b, D1/D2 step 9, D3 step 6, D4 step 12, A2/A3 steps 5 and 13. The template
+  blueprint is ADR-0008 / work/0006 step 15, which stays open there (waits on step 14).
 - Author: Antigravity (agent, pair programming with nanthony)
 - Date: 2026-10-20
 - Related: [work/0004](../0004-consistency-review-and-orchestrator-question/proposal.md) (consistency review),

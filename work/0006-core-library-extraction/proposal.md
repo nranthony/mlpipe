@@ -5,7 +5,7 @@
   [plan.md](plan.md)
 - Author: Claude (agent, windows-ai-sandbox)
 - Date: 2026-10-19
-- Related: [work/0004](../0004-consistency-review-and-orchestrator-question/proposal.md)
+- Related: [work/0004](../archive/0004-consistency-review-and-orchestrator-question/proposal.md)
   (findings A–C are prerequisites here), DESIGN.md §7 (the extraction plan this would
   amend), numerai repo `work/0010-mlpipe-spine-adoption/spec.md` (the consumer side)
 

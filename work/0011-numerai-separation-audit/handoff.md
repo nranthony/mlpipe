@@ -4,8 +4,20 @@
 - Written: 2026-10-23, from a read-only audit session (2× Haiku keyword sweeps,
   2× Sonnet semantic reviews; high-severity claims spot-checked by hand)
 - Repos audited: `mlpipe` @ `3d9ee29`, `numerai` @ `7f47f05` (pins mlpipe `v0.2.0`)
-- Status: **findings only — nothing changed.** Priority is mlpipe cleanliness;
-  reverse-direction notes are lower priority.
+- Status: **refreshed 2026-10-27 — partly done.** Done: A's registration/naming
+  (`plugins.py:38` `numerai-example`), C (numerapi → `numerai` extra, `pyproject.toml:17`;
+  legacy `baselines.yaml` deleted; generic tests ported to `demo-tabular`), B Low scrub,
+  D4 (ADR-0007 split), D6 `TEMPLATE_OWNERSHIP.md` — all via work/0012 (archived) and
+  ADR-0009. **Still open:** (1) the "one spec": feature selection is still the
+  `feature_` prefix (`steps/features.py:49`, `train.py:83`, `tabular_eval.py:106`,
+  `register.py:43`; Titanic renames its columns to fit, `examples/titanic/clean.py:35`)
+  and era-purged `CVPlanStep` still lives in generic `steps/cvplan.py:75` (imported by
+  the example, `examples/numerai/pipeline.py:16`); B Med rows also open (fixed slots
+  `features.py:41`, Pearson `fold{i}_corr` `train.py:103`, fixed `prediction` column
+  `train.py:123`). (2) A "shrink the example": ADR-0009's trigger (work/0006 step 14) fired, as step 14
+  was confirmed done 2026-10-27. Re-decide now; numerai uses only `mlpipe.core`.
+  (3) D1-D3: DESIGN §2 (`DESIGN.md:131-135`) and §8 (`:276-283`) still carry Numerai
+  specifics. Priority 2 (numerai repo) untouched.
 - Since the audit (2026-10-26): resolved, D4 (ADR-0007 split, `3d9ee29`) and the A
   stale-`live.parquet` bullet (work/0009: round-keyed `ingest_live`). Line numbers
   below are as of `3d9ee29`; the raw-data default is now `../raw_data/numerai`

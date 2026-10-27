@@ -1,7 +1,12 @@
 # Proposal: post-build follow-ups and the choice of next direction
 
-- Status: In review — **gap 1 fixed 2026-08-24** (see "Resolution" below); gaps 2 and 3
-  still open, direction for the rest still awaiting nanthony
+- Status: Done — **gap 1 fixed 2026-08-24** (see "Resolution" below); gaps 2 and 3
+  closed by work/0006 steps 3 and 4; direction answered by ADR-0005 (library first,
+  Numerai as example); the core ceiling replaced by ADR-0004's structural rules.
+- Archived 2026-10-27: gap 1 → `core/signature.py` closure (since widened by work/0006
+  step 11); gap 2 → work/0006 step 3 (`--from` asserts a cache hit, `tune` never uses
+  it); gap 3 → work/0006 step 4 / ADR-0006 (`mlpipe promote`, `register` no longer
+  auto-registers); ZenML spike → not needed (work/0004: keep the custom core).
 - Author: Claude (agent, windows-ai-sandbox)
 - Date: 2026-08-22 (session `numerai-mlpipe-testing`)
 

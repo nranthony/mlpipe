@@ -1,11 +1,17 @@
 # Proposal: finish the dependency audit (CVE scan, depaudit re-run, open choices)
 
-- Status: Draft — tasks 1-3 are pre-decided and waiting on host-side steps; tasks 4-5
-  need nanthony's answer (see "Open questions")
+- Status: Draft, refreshed 2026-10-27 — task 1 **done** (`dd1e540` is on `main`; the
+  branch is gone). Q4 (empty `.venv-sandbox`) resolved operationally: repopulated
+  host-side 2026-10-20, cause still unknown. **Still open:** task 2, the CVE scan
+  (never run; `uv.lock` has since moved: `51d0b94` v0.2.0, `f5f0ee0` copier extra,
+  `a8ec809` numerai extra); task 3, the `depaudit posture` re-run (P04/P05 unconfirmed);
+  task 4, `exclude-newer` is still the fixed `2026-09-21` pin (`pyproject.toml:60`);
+  task 5, `track` still pulls full `mlflow>=3` (`pyproject.toml:19`). 2-3 are host
+  steps; 4-5 need nanthony.
 - Author: Claude (agent, windows-ai-sandbox)
 - Date: 2026-10-06
 - Related: [ADR-0003](../../docs/adr/0003-dependency-resolution-hardening.md) (the
-  hardening this follows), [work/0004](../0004-consistency-review-and-orchestrator-question/proposal.md)
+  hardening this follows), [work/0004](../archive/0004-consistency-review-and-orchestrator-question/proposal.md)
   (its "ADR-0004" hygiene item is resolved by ADR-0003)
 
 ## Summary
