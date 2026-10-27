@@ -7,6 +7,10 @@ A pickled backend names its class, not its source, and serving retrains nothing:
 a backend edit after training would not move this step's signature. So `run`
 refuses a model whose recorded backend code differs from the code now on disk.
 A cache hit returns what the training-time code produced.
+
+The output is the scored frame's id columns plus `prediction`, unless a host's
+`finish(scored, bundle)` reshapes it (e.g. a threshold into a submission's label
+column); it must keep one row per scored row.
 """
 
 from __future__ import annotations
@@ -31,23 +35,29 @@ class PredictStep(Step):
     inputs = ["model_bundle", "model", "fitted_transformer", "input_frame"]
     outputs = ["predictions"]
 
-    def __init__(self, frame_key: str = "input_frame", prepare: Callable | None = None) -> None:
-        # `prepare(frame, bundle) -> (features, ids)`: a host's serving fill. Its
-        # module enters the signature (code_deps), so it must name its own code: a
+    def __init__(
+        self, frame_key: str = "input_frame", prepare: Callable | None = None,
+        finish: Callable | None = None,
+    ) -> None:
+        # `prepare(frame, bundle) -> (features, ids)`: a host's serving fill.
+        # `finish(scored, bundle) -> frame`: a host's output shaping. Their modules
+        # enter the signature (code_deps), so each must name its own code: a
         # lambda, a nested function, a partial (module `functools`) or a __main__
         # script would hash the wrong file or none.
-        if prepare is not None and not (
-            inspect.isfunction(prepare)
-            and prepare.__qualname__ == prepare.__name__ != "<lambda>"
-            and prepare.__module__ != "__main__"
-        ):
-            raise TypeError(f"prepare must be a plain module-level function, got {prepare!r}")
+        for label, hook in (("prepare", prepare), ("finish", finish)):
+            if hook is not None and not (
+                inspect.isfunction(hook)
+                and hook.__qualname__ == hook.__name__ != "<lambda>"
+                and hook.__module__ != "__main__"
+            ):
+                raise TypeError(f"{label} must be a plain module-level function, got {hook!r}")
         self.frame_key = frame_key
         self.prepare = prepare
+        self.finish = finish
         self.inputs = ["model_bundle", "model", "fitted_transformer", frame_key]
 
     def code_deps(self, cfg):
-        return [self.prepare.__module__] if self.prepare else []
+        return list(dict.fromkeys(h.__module__ for h in (self.prepare, self.finish) if h))
 
     def run(self, ctx):
         bundle = ctx.get("model_bundle")
@@ -67,6 +77,11 @@ class PredictStep(Step):
         matrix = transformer.transform(feats.to_numpy())
         preds = model.predict(pl.from_numpy(matrix, schema=bundle["features"]))
         result = ids.with_columns(pl.Series("prediction", preds))
+        if self.finish:
+            result = self.finish(result, bundle)
+            if not isinstance(result, pl.DataFrame) or result.height != ids.height:
+                raise ValueError(f"finish must return a polars DataFrame of {ids.height} rows, "
+                                 "one per scored row")
         art = ctx.put(result, "predictions")
         ctx.log_meta("rows", result.height)
         ctx.log_meta("bundle", hashes["model_bundle"])

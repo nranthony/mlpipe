@@ -9,6 +9,9 @@ inference (deterministic given the bytes) and stored as parquet.
     ingest:
       files:
         raw_train: {path: titanic/train.csv, sha256: 7d118fef...}
+
+A second instance under another name (`IngestFileStep(["raw_test"], name="ingest_test")`)
+is a serve list's source step, configured under its own name.
 """
 
 from __future__ import annotations
@@ -60,8 +63,9 @@ class IngestFileStep(Step):
     inputs: list[str] = []
     config_model = IngestFileConfig
 
-    def __init__(self, outputs: list[str]) -> None:
+    def __init__(self, outputs: list[str], name: str = "ingest") -> None:
         self.outputs = list(outputs)  # one per configured file
+        self.name = name  # its config subtree; a serve source beside a training ingest
 
     def run(self, ctx):
         cfg = IngestFileConfig.model_validate(ctx.config.get(self.name, {}))

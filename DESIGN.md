@@ -133,6 +133,9 @@ fall within `max_age_days` before the round's open time, checked on the download
 file before it is renamed into place) → `validate_live` (the bundle's features,
 dtypes, null bounds) → `predict` (`PredictStep(frame_key="validated_live",
 prepare=serve.prepare)`: the cleaner's fill, ids `numerai_ticker` + `era`).
+Titanic: `ingest_test` (a second `IngestFileStep`, Kaggle `test.csv` pinned by sha256)
+→ `predict` (`prepare` reuses clean's `features`, so no label is needed; `finish`
+thresholds P(Survived) at 0.5 into a `PassengerId, Survived` 0/1 frame).
 
 The stateless/stateful boundary between blocks 3 and 4 is deliberate: block 3 caches on
 content alone; block 4 produces fitted state that must be versioned with the model.
@@ -205,7 +208,9 @@ protocol. Plotting/metrics hide behind plain functions, not classes.
   hash. A module without `build_serve_steps()` is served by `PredictStep()` alone and
   needs `--input`; its default prepare selects the bundle's features and `id_columns`
   (`register.id_columns`). The old `serve_input`/`prepare` module hooks are refused
-  (ADR-0007). Output: ids + `prediction`.
+  (ADR-0007). Output: ids + `prediction`, unless the PredictStep has a `finish(scored,
+  bundle)` hook (a module-level function, in the signature like `prepare`; one row per
+  scored row), e.g. Titanic's threshold into `PassengerId, Survived`.
 - **Store hygiene:** `mlpipe gc --dry-run [--keep-days 30] [--root-file <path>]` lists
   store files that no pinned, promoted or root-file bundle's lineage, and no manifest
   from the window, reaches. A root file is any text naming 64-hex hashes. It
@@ -266,7 +271,9 @@ appear after the host package is (re)installed. Before the first tag:
   tests for register, promote, tune, predict and lineage run on it. A small real-data
   harness, `titanic-example` (`mlpipe.examples.titanic`, Kaggle `train.csv` via the
   generic `IngestFileStep`, which pins each file's sha256), runs in seconds and is where
-  the viewing surfaces are tried (work/0013).
+  the viewing surfaces are tried (work/0013). Its serve path scores Kaggle's unlabeled
+  `test.csv` into a submission-shaped `PassengerId, Survived` frame, the generic
+  serve contract on a second domain.
 
 A Copier template, if built, carries **scaffolding only**: agent docs, ADR and `work/`
 conventions, a config skeleton and CLI wiring. It is built only after a host repo has

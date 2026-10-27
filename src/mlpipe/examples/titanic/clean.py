@@ -24,6 +24,10 @@ class TitanicCleanConfig(StrictConfig):
 
 
 def features(raw: pl.DataFrame) -> pl.DataFrame:
+    """The `feature_*` columns, keyed by PassengerId. Training and serving
+    (`serve.prepare`) both call this; `Survived` is carried only when present,
+    since Kaggle's `test.csv` has none."""
+    label = [pl.col("Survived").cast(pl.Float64)] if "Survived" in raw.columns else []
     title = (
         pl.col("Name").str.extract(r",\s*([^.]+)\.", 1).str.strip_chars()
         .replace(TITLE_ALIASES)
@@ -31,7 +35,7 @@ def features(raw: pl.DataFrame) -> pl.DataFrame:
     family = pl.col("SibSp") + pl.col("Parch") + 1
     return raw.select(
         pl.col("PassengerId").cast(pl.Int64),
-        pl.col("Survived").cast(pl.Float64),
+        *label,
         (pl.col("Sex") == "female").cast(pl.Int8).alias("feature_sex_female"),
         pl.col("Pclass").cast(pl.Int8).alias("feature_pclass"),
         # a "NaN" cell is missing too, the same as Kaggle's empty one

@@ -4,6 +4,9 @@
   (2026-10-26). Answers: (1) A+B first, then C/D, all built the same day;
   (2) test.csv serve path later; (3) reports both local and publishable.
   Built 2026-10-26 (goals/STATUS.md).
+  - 2026-10-27: serve path built (answer 2): `mlpipe predict --pipeline
+    titanic-example` scores `test.csv` into `PassengerId, Survived` (0/1) via
+    `examples/titanic/serve.py` and a generic `PredictStep(finish=...)` hook.
   - Open before archiving: the human looks at the MLflow UI (curves, params,
     artifacts) and the first report.
   - Differences from the plan:
