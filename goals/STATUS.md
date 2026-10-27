@@ -9,9 +9,16 @@
   and archived. ADR-0007 / work/0009 (serve pipeline, inputs named in config) built
   2026-10-24, real-data cache hit 2026-10-26, archived. Real serve runs 2026-10-26
   (rounds 1384 and 1378, bundle `1d3c948c`, not promoted) pass. ADR-0008 (optional step 15, Copier
-  template) accepted; waits for step 14's first cache hit. work/0013 (Titanic example,
-  viewing surfaces, ADR-0010) built 2026-10-26; the Kaggle test.csv serve path is left
-  for a later item.
+  template) accepted; unblocked now that step 14 is done. work/0013 (Titanic example,
+  viewing surfaces, ADR-0010) built 2026-10-26; MLflow run grouping and the Kaggle
+  test.csv serve path added 2026-10-27; it archives once the human has looked at the
+  MLflow UI and the first report.
+- Release: `v0.3.0` prepared (`190e882`, version bumped). Waiting on host-side
+  `uv lock`, tag and push, then numerai's pin bump.
+- Due next: the ADR-0009 re-decision (shrink the Numerai example; its trigger, step
+  14, fired) and work/0011's "one spec" (feature selection, cvplan relocation).
+- numerai-example's next full run retrains once (~30 min): the work/0013 train
+  changes and a clean docstring edit moved its signatures.
 - Data: Numerai **v6.0** (v5.x training files are no longer served). Raw files are in
   `/workspace/raw_data/numerai/v6.0` (downloaded host-side 2026-10-20). Since work/0009
   the example reads `v6.0/2026-10-20/` (copied there 2026-10-26, not moved: the folder
