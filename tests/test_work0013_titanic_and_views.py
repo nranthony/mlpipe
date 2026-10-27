@@ -1,7 +1,8 @@
 """work/0013 — the Titanic example and the viewing surfaces (ADR-0010).
 
 Tests never read `raw_data`: a synthetic, Titanic-shaped CSV stands in for Kaggle's
-`train.csv`, pinned by its own sha256 through a config override.
+`train.csv`, pinned by its own sha256 through a config override, and one without
+`Survived` stands in for `test.csv` on the serve path.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ import json
 import numpy as np
 import polars as pl
 import pytest
+import yaml
 from typer.testing import CliRunner
 
 from mlpipe.backends.lightgbm_backend import LightGBMBinaryBackend
@@ -19,10 +21,16 @@ from mlpipe.backends.torch_backend import TorchMLPBackend
 from mlpipe.cli import app
 from mlpipe.core.pipeline import Pipeline
 from mlpipe.core.store import LocalCasStore
+from mlpipe.examples.titanic import serve
 from mlpipe.examples.titanic.clean import features, stratified_holdout
-from mlpipe.examples.titanic.pipeline import DEFAULT_CONFIG, build_steps
+from mlpipe.examples.titanic.pipeline import (
+    DEFAULT_CONFIG,
+    build_serve_steps,
+    build_steps,
+)
 from mlpipe.steps import charts
 from mlpipe.steps.ingest_file import sha256_file
+from mlpipe.steps.predict import PredictStep
 from mlpipe.steps.train import history_rows, importance_rows
 from mlpipe.trackers.mlflow_tracker import flat_params
 
@@ -64,6 +72,7 @@ def titanic(tmp_path):
     cfg["download_dir"] = str(tmp_path / "raw")
     cfg["tracker"] = {"kind": "none"}
     cfg["ingest"]["files"]["raw_train"]["sha256"] = sha256_file(src)
+    cfg.pop("ingest_test")  # a serve step: a direct Pipeline(build_steps()) has no siblings
     cfg["train"]["model"]["params"]["n_estimators"] = ROUNDS
     return cfg, LocalCasStore(tmp_path / "store"), tmp_path / "manifests"
 
@@ -331,3 +340,80 @@ def test_work0013_report_page_lists_its_sources(tmp_path):
     page = out.read_text()
     assert page.startswith("<title>Test Report</title>") and "ab" * 32 in page
     assert "<html" not in page and "toImage" in page  # fragment; PNG button removed
+
+
+# ------------------------------------------------------------------ serve path
+
+
+@pytest.fixture()
+def titanic_served(titanic, tmp_path):
+    """`titanic` plus a synthetic, test.csv-shaped file (no Survived), pinned, and
+    the config written out for the CLI: (cfg, store, manifests, config path, test frame)."""
+    cfg, store, manifests = titanic
+    test = titanic_like(80, seed=7).drop("Survived").with_columns(pl.col("PassengerId") + 1000)
+    src = tmp_path / "raw" / "titanic" / "test.csv"
+    test.write_csv(src)
+    cfg["ingest_test"] = copy.deepcopy(DEFAULT_CONFIG["ingest_test"])
+    cfg["ingest_test"]["files"]["raw_test"]["sha256"] = sha256_file(src)
+    path = tmp_path / "cfg.yaml"
+    path.write_text(yaml.safe_dump(cfg))
+    return cfg, store, manifests, path, test
+
+
+def _predict(tmp_path, manifests, config, bundle, out):
+    return CliRunner().invoke(app, [
+        "predict", "--pipeline", "titanic-example", "--bundle", bundle[:12],
+        "--config", str(config), "--store-dir", str(tmp_path / "store"),
+        "--manifests-dir", str(manifests), "--out", str(out),
+    ])
+
+
+def test_work0013_predict_writes_a_submission_shaped_frame(titanic_served, tmp_path):
+    cfg, store, manifests, config, test = titanic_served
+    serve_names = [s.name for s in build_serve_steps()]
+    bundle = Pipeline(build_steps(), store, manifests, cfg,
+                      sibling_steps=serve_names).run()["artifacts"]["model_bundle"]
+    out = tmp_path / "submission.parquet"
+    cli = _predict(tmp_path, manifests, config, bundle.content_hash, out)
+    assert cli.exit_code == 0, cli.output
+    sub = pl.read_parquet(out)
+    assert sub.columns == ["PassengerId", "Survived"]
+    assert sub.schema == {"PassengerId": pl.Int64, "Survived": pl.Int64}
+    assert sub["PassengerId"].to_list() == test["PassengerId"].to_list()
+    assert set(sub["Survived"].unique()) <= {0, 1} and 0 < sub["Survived"].sum() < sub.height
+
+    pred_hash = sha256_file(out)  # the copied file is the artifact's bytes
+    lineage = CliRunner().invoke(app, ["lineage", pred_hash[:12], "--pipeline", "titanic-example",
+                                       "--manifests-dir", str(manifests)])
+    assert lineage.exit_code == 0, lineage.output
+    steps = {line.split()[0] for line in lineage.output.splitlines()}
+    assert {"predict", "ingest_test", "register", "train", "clean", "ingest"} <= steps
+
+    again = _predict(tmp_path, manifests, config, bundle.content_hash, tmp_path / "again.parquet")
+    assert again.exit_code == 0, again.output
+    status = {line.split()[0]: line.split()[1] for line in again.output.splitlines()[:2]}
+    assert status == {"ingest_test": "cached", "predict": "cached"}
+
+
+def test_work0013_serving_derives_exactly_the_training_features():
+    labelled = titanic_like(60, seed=3)
+    bundle = {"features": [c for c in features(labelled).columns if c.startswith("feature_")]}
+    feats, ids = serve.prepare(labelled.drop("Survived"), bundle)
+    assert feats.equals(features(labelled).select(bundle["features"]))
+    assert ids.columns == ["PassengerId"] and "Survived" not in feats.columns
+
+
+def test_work0013_finish_thresholds_probabilities_into_labels():
+    scored = pl.DataFrame({"PassengerId": [1, 2, 3, 4], "prediction": [0.1, 0.5, 0.51, 0.99]})
+    sub = serve.finish(scored, {"target": "Survived"})
+    assert sub.to_dict(as_series=False) == {"PassengerId": [1, 2, 3, 4], "Survived": [0, 0, 1, 1]}
+    with pytest.raises(ValueError, match="Survived model"):
+        serve.finish(scored, {"target": "Fare"})
+
+
+def test_work0013_predict_finish_hook_is_checked_and_in_the_signature():
+    with pytest.raises(TypeError, match="finish must be a plain module-level function"):
+        PredictStep(finish=lambda s, b: s)
+    source, step = build_serve_steps()
+    assert source.name == "ingest_test" and source.outputs == ["raw_test"]
+    assert step.code_deps({}) == ["mlpipe.examples.titanic.serve"]
