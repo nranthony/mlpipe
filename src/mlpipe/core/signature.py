@@ -54,8 +54,16 @@ def config_hash(config: Any, step_name: str) -> str:
 
 
 def _module_path(name: str) -> Path | None:
-    """Source file for a module name, without importing the module itself."""
+    """Source file for a module name, without importing the module itself.
+    `pkg.mod.Symbol` (from `from pkg.mod import Symbol`) is no module: find_spec on
+    it would import `pkg.mod` to look for a `__path__`, so a non-package parent
+    answers None first (numerai work/0013: shrec imported on every cache hit)."""
+    parent = name.rpartition(".")[0]
     try:
+        if parent:
+            outer = importlib.util.find_spec(parent)  # imports only parent's packages
+            if outer is None or outer.submodule_search_locations is None:
+                return None
         spec = importlib.util.find_spec(name)
     except (ImportError, ValueError):
         return None

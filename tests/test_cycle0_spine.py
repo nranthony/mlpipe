@@ -192,6 +192,17 @@ def test_cycle0_lineage(dirs):
     assert chain[-1]["config_hash"]
 
 
+def test_lineage_names_the_execution_not_a_later_cache_hit(dirs):
+    """numerai work/0013: a cached rerun's commit is not the artifact's provenance."""
+    store, manifests = dirs
+    seeds = [seed_artifact(store)]
+    first = build_pipeline(store, manifests).run(seeds=seeds)
+    build_pipeline(store, manifests).run(seeds=seeds)  # all cached
+    chain = build_pipeline(store, manifests).lineage(first["artifacts"]["summary"].content_hash)
+    assert [m["status"] for m in chain] == ["success", "success"]
+    assert {m["run_id"] for m in chain} == {first["manifests"][0]["run_id"]}
+
+
 def test_cycle0_manifest_completeness(dirs):
     store, manifests = dirs
     seeds = [seed_artifact(store)]

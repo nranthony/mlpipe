@@ -3,9 +3,9 @@
 **Current state (update in place; the log below is append-only):**
 - Build cycles 0–10: code complete since 2026-08-20.
 - Active work: work/0006 plan ([plan.md](../work/0006-core-library-extraction/plan.md)).
-  Steps 1–13 and 16 done. `v0.2.0` tagged (work/0008, cache and provenance
-  correctness; archived). Step 14 (numerai adoption, pinned to `v0.2.0`) is unblocked
-  and driven from the numerai side (its work/0012 review). work/0010 (hygiene) built
+  Steps 1–14 and 16 done. `v0.2.0` tagged (work/0008, cache and provenance
+  correctness; archived). Step 14 (numerai adoption, pinned to `v0.2.0`) done
+  2026-10-23 on the numerai side, confirmed here 2026-10-27. work/0010 (hygiene) built
   and archived. ADR-0007 / work/0009 (serve pipeline, inputs named in config) built
   2026-10-24, real-data cache hit 2026-10-26, archived. Real serve runs 2026-10-26
   (rounds 1384 and 1378, bundle `1d3c948c`, not promoted) pass. ADR-0008 (optional step 15, Copier
@@ -654,3 +654,23 @@ Log:
     - MLflow experiment artifact paths are absolute (`/workspace/mlpipe/mlruns/<id>`),
       so a host UI whose checkout lives at a different path will not open artifacts
       logged from the sandbox.
+- 2026-10-27 — **work/0006 step 14 confirmed done; two host follow-ups fixed.**
+  - **Step 14:** the numerai repo's own records show it finished 2026-10-23:
+    - pins `v0.2.0`, with ADR-0008 there and entry point `numerai-client`;
+    - stage A (`snapshot → prep`) is host-proved: the second session was `cached`
+      with the same prep hash `410367210bbb`, and lineage reaches the snapshot;
+    - stage B (`regime`) was host-proved 2026-10-25;
+    - it uses only `mlpipe.core`, never the example.
+
+    This unblocks step 15 (Copier) and the ADR-0009 re-decision.
+  - **Follow-ups numerai raised:**
+    - `_module_path` no longer imports `pkg.mod` to resolve a `from pkg.mod import
+      Symbol` name, so a signature on a cache hit no longer imports shrec.
+    - `lineage` names the execution that computed an artifact, not a later cache hit,
+      so its commit is the provenance.
+    - Their third ask, a streaming `save` for snapshotted files, landed in `e09dec8`
+      but is in no tag yet.
+
+    No signature changes: a titanic-example rerun was 8/8 cached.
+  - **Measured:** 212 tests pass, ruff clean.
+  - **Core size:** orchestration 746 → 757 lines, the minimum for the two fixes.

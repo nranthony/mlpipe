@@ -115,6 +115,16 @@ def test_declared_lazy_dep_is_hashed(pkg):
     assert sig.step_signature(lazy, {}, {}) != before
 
 
+def test_imported_symbols_do_not_import_their_module(pkg):
+    """`from sigpkg.helper import scale` yields the name `sigpkg.helper.scale`;
+    resolving it must not import sigpkg.helper (numerai work/0013)."""
+    root, _ = pkg
+    (root / "heavy.py").write_text("raise RuntimeError('imported')\nTHING = 1\n")
+    assert sig._module_path("sigpkg.heavy.THING") is None
+    assert "sigpkg.heavy" not in sys.modules
+    assert sig._module_path("sigpkg.heavy") == root / "heavy.py"  # the module still resolves
+
+
 def test_editing_the_step_module_still_changes_the_signature(pkg):
     """The original guarantee must survive the widening."""
     root, step = pkg

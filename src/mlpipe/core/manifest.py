@@ -100,7 +100,10 @@ class ManifestLog:
             earlier = [i for i in producers.get(h, []) if i < before]
             if not earlier:
                 continue
-            i = max(earlier)
+            # the execution that computed it, not a later cache hit: its commit is
+            # the provenance (numerai work/0013); same signature, same inputs
+            computed = [i for i in earlier if done[i]["status"] == "success"]
+            i = max(computed or earlier)
             m = done[i]
             if m["manifest_id"] in seen:
                 continue
