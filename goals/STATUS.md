@@ -689,3 +689,24 @@ Log:
       `steps/`, and fixed slot and column names;
     - the Numerai text in DESIGN §2/§8;
     - ADR-0009's re-decision on shrinking the example, now due since step 14 is done.
+- 2026-10-27 — **numerai-example smoke run on the work/0013 code (plumbing only).**
+  - **Run:** `--set clean.cleaner.feature_set=small --set clean.era_slice.mode=tail
+    --set clean.era_slice.n=100 --set cvplan.n_folds=2 --set
+    train.model.params.n_estimators=20 --to evaluate --tag smoke`.
+  - **Time and memory:** 41 s (train 36.5 s), peak memory (RSS) 1.1 GB. The identical
+    rerun was 7/7 cached in 2.7 s.
+  - **Plan:** `7614d02f`. That is not the baseline's plan, so no comparison is valid.
+  - **Outputs:**
+    - `train_history` has 80 rows: 2 folds × train/valid × 20 rounds of `l2`;
+    - `feature_importance` has 300 rows;
+    - `eval_chart` is 4.9 MB, mostly the inlined plotly library;
+    - the MLflow parent and child runs are grouped, and the rerun's children are
+      tagged cached.
+  - **Fixed:**
+    - the cached-run lookup now searches every MLflow experiment, so ingest and
+      validate, last executed under the pre-ADR-0009 `numerai` experiment, link too;
+    - the `era_slice` docstring notes that validation's newest eras have no target
+      (tail 100 keeps 75).
+
+    That docstring edit moves the example's clean signature. The pending full
+    retrain absorbs it.

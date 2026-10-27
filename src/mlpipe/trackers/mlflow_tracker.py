@@ -86,7 +86,7 @@ class MlflowTracker:
         if source is not None:
             tags["mlpipe.source_run_id"] = source.info.run_id
             note += (f" Curves and charts are on [{source.info.run_name}]"
-                     f"(#/experiments/{self._experiment_id}/runs/{source.info.run_id}).")
+                     f"(#/experiments/{source.info.experiment_id}/runs/{source.info.run_id}).")
         tags["mlflow.note.content"] = note
         self._mlflow.start_run(
             run_name=f"{manifest['step']}-{manifest['signature'][:8]} (cached)",
@@ -102,9 +102,11 @@ class MlflowTracker:
 
     def _source_run(self, signature: str) -> Any:
         """The newest finished run that executed this signature. Matched on the
-        `signature` param, which runs logged before the tags also carry."""
-        runs = self._mlflow.MlflowClient().search_runs(
-            [self._experiment_id],
+        `signature` param, which runs logged before the tags also carry. Every
+        experiment is searched: a renamed experiment keeps its old runs."""
+        client = self._mlflow.MlflowClient()
+        runs = client.search_runs(
+            [e.experiment_id for e in client.search_experiments()],
             filter_string=f"params.signature = '{signature[:16]}' and attributes.status = 'FINISHED'",
             order_by=["attributes.start_time DESC"],
             max_results=50,

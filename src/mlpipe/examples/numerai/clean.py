@@ -34,7 +34,9 @@ class EraSlice(StrictConfig):
     """Smoke-run row cut (work/0003). Whole eras only: row sampling would keep the
     plan hash and look comparable to a full run. `tail`/`head` keep n contiguous
     eras (purge/embargo stay meaningful); `stride` keeps every n-th era, which
-    breaks contiguity, so purge_eras then spans n× more real eras."""
+    breaks contiguity, so purge_eras then spans n× more real eras. The slice
+    applies to validation too: its newest eras have no target yet and the cleaner
+    drops them (tail 100 on v6.0 leaves 75 validation eras)."""
 
     mode: Literal["tail", "head", "stride"] = "tail"
     n: int = Field(gt=0)
